@@ -3,21 +3,16 @@
 # Tests are numbered to control execution order (sorted alphabetically).
 
 _TEST_WT_DIR=""
-_TEST_SSH_KEY=""
 _ORIG_WORKTREE_LOC=""
-_ORIG_SSH_KEY_PATH=""
 
 setup_all() {
     _TEST_WT_DIR=$(mktemp -d)
-    _TEST_SSH_KEY=$(mktemp)
 
     # Save originals
     _ORIG_WORKTREE_LOC="${WORKTREE_LOC:-}"
-    _ORIG_SSH_KEY_PATH="${SSH_KEY_PATH:-}"
 
     # Set up test config
     export WORKTREE_LOC="$_TEST_WT_DIR"
-    export SSH_KEY_PATH="$_TEST_SSH_KEY"
 }
 
 teardown_all() {
@@ -36,11 +31,9 @@ teardown_all() {
     fi
 
     [[ -n "$_TEST_WT_DIR" ]] && rm -rf "$_TEST_WT_DIR"
-    [[ -n "$_TEST_SSH_KEY" ]] && rm -f "$_TEST_SSH_KEY"
 
     # Restore originals
     export WORKTREE_LOC="${_ORIG_WORKTREE_LOC}"
-    export SSH_KEY_PATH="${_ORIG_SSH_KEY_PATH}"
 }
 
 setup_all
@@ -63,7 +56,6 @@ test_02_create_worktree() {
     assert_dir_exists "$wt_path"
     assert_dir_exists "$hm_path"
     assert_dir_exists "${hm_path}/.claude"
-    assert_dir_exists "${hm_path}/.ssh"
 
     # Verify it's a valid git worktree
     assert_ok git -C "$wt_path" rev-parse --is-inside-work-tree
@@ -74,16 +66,20 @@ test_03_synthetic_home_contents() {
     project=$(detect_project_name)
     local hm_path="${_TEST_WT_DIR}/${project}.homes/test-yolobox-wt-1"
 
-    # SSH key should be symlinked
-    local key_name
-    key_name=$(basename "$SSH_KEY_PATH")
-    assert_file_exists "${hm_path}/.ssh/${key_name}"
-    assert_symlink "${hm_path}/.ssh/${key_name}"
-
     # .gitconfig should be symlinked (if real one exists)
     if [[ -f "${HOME}/.gitconfig" ]]; then
         assert_symlink "${hm_path}/.gitconfig"
     fi
+}
+
+test_03b_push_url_disabled() {
+    local project
+    project=$(detect_project_name)
+    local wt_path="${_TEST_WT_DIR}/${project}.worktrees/test-yolobox-wt-1"
+
+    local push_url
+    push_url=$(git -C "$wt_path" remote get-url --push origin)
+    assert_eq "PUSH_DISABLED_BY_YOLOBOX" "$push_url" "Push URL should be disabled"
 }
 
 test_04_create_duplicate() {

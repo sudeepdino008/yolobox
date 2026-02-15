@@ -28,7 +28,7 @@ usage() {
     echo "Usage: yolobox <command> [args]"
     echo ""
     echo "Commands:"
-    echo "  setup                 One-time configuration (deps, paths, SSH key)"
+    echo "  setup                 One-time configuration (deps, worktree location)"
     echo "  create <branch_name>  Create a sandboxed worktree"
     echo "  attach                Pick a worktree with fzf and launch claude in sandbox"
     echo "  list                  Show all worktrees for the current project"

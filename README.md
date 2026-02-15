@@ -32,7 +32,6 @@ your-repo/
   └── your-repo.homes/
       ├── feature-x/        ← synthetic $HOME (read-write)
       │   ├── .claude/      ← session state persists here
-      │   ├── .ssh/         ← symlinks to your real key
       │   └── .gitconfig    ← symlink to your real config
       └── bugfix-y/
 ```
@@ -76,7 +75,7 @@ yolobox attach
 
 | Command | Description |
 |---|---|
-| `yolobox setup` | One-time config: worktree location, SSH key, dependency check |
+| `yolobox setup` | One-time config: worktree location, dependency check |
 | `yolobox create <branch>` | Create a git worktree + synthetic home |
 | `yolobox attach` | fzf picker → launch Claude in sandbox |
 | `yolobox list` | Show worktrees for current project with active/inactive status |
@@ -90,7 +89,6 @@ Config lives at `~/.config/yolobox/config`:
 
 ```bash
 WORKTREE_LOC=~/worktrees
-SSH_KEY_PATH=~/.ssh/id_ed25519
 ```
 
 ---
@@ -118,22 +116,39 @@ allow_write.my-app=/path/to/output-dir
 
 ## Security Model
 
-The macOS Seatbelt profile enforces:
+yolobox and Claude Code each provide their own sandbox. When nested, the most restrictive rule from each layer wins.
+
+**What yolobox adds** (not provided by Claude Code's built-in sandbox):
+
+| Layer | Mechanism |
+|---|---|
+| **Worktree isolation** | Work on a git worktree copy, not your original repo |
+| **`$HOME` read blocking** | Seatbelt denies reads to real `$HOME` — blocks `~/.aws/`, `~/.ssh/`, browser data, etc. |
+| **Synthetic `$HOME`** | Clean home with only `.claude/` and `.gitconfig` |
+| **Environment scrubbing** | `env -i` allowlist — kills `GITHUB_TOKEN`, `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `NPM_TOKEN`, etc. Only `HOME`, `PATH`, `SHELL`, `TERM`, `LANG`, `USER`, `TMPDIR`, `ANTHROPIC_API_KEY` pass through |
+| **Push blocking** | Push URL set to `PUSH_DISABLED_BY_YOLOBOX` — `git push` fails, `git fetch`/`pull` still work |
+
+**What Claude Code's built-in sandbox adds:**
+
+| Layer | Mechanism |
+|---|---|
+| **Write restrictions** | Limits writes to CWD and approved paths |
+| **Network domain allowlisting** | Proxy restricts outbound connections to approved domains |
+
+**Combined effect:**
 
 | Access | Policy |
 |---|---|
-| **Filesystem writes** | Denied everywhere, except worktree, synthetic `$HOME`, `/tmp` |
-| **Filesystem reads** | Denied for real `$HOME`. Allowed for worktree, synthetic `$HOME`, system paths |
-| **Network** | Full access |
+| **Filesystem writes** | Worktree + synthetic `$HOME` + `/tmp` only (yolobox Seatbelt) |
+| **Filesystem reads** | Real `$HOME` blocked (yolobox), system paths allowed |
+| **Network** | Domain-restricted by Claude Code's proxy |
+| **Environment** | Scrubbed — no credentials leak in |
+| **Git push** | Disabled — commit locally, push from outside |
 | **Processes** | Full access (Claude can run git, npm, etc.) |
 
-What this protects against:
-- Claude reading `~/.ssh/`, `~/.aws/`, `~/.env`, other repos, browser data
-- Claude writing outside its worktree (no modifying your real home, other projects, system files)
-
-What this does **not** protect against:
-- Network exfiltration (Claude can `curl` anywhere)
-- Damage within the worktree itself (it has full write access there)
+**Residual risks:**
+- Damage within the worktree itself (full write access there)
+- ANTHROPIC_API_KEY is passed through (required for Claude Code to function)
 
 ---
 

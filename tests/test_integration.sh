@@ -3,18 +3,13 @@
 
 _TEST_INT_DIR=""
 _ORIG_WORKTREE_LOC=""
-_ORIG_SSH_KEY_PATH=""
 
 setup_all() {
     _TEST_INT_DIR=$(mktemp -d)
-    local test_key="${_TEST_INT_DIR}/test_key"
-    touch "$test_key"
 
     _ORIG_WORKTREE_LOC="${WORKTREE_LOC:-}"
-    _ORIG_SSH_KEY_PATH="${SSH_KEY_PATH:-}"
 
     export WORKTREE_LOC="$_TEST_INT_DIR"
-    export SSH_KEY_PATH="$test_key"
 }
 
 teardown_all() {
@@ -33,7 +28,6 @@ teardown_all() {
     [[ -n "$_TEST_INT_DIR" ]] && rm -rf "$_TEST_INT_DIR"
 
     export WORKTREE_LOC="${_ORIG_WORKTREE_LOC}"
-    export SSH_KEY_PATH="${_ORIG_SSH_KEY_PATH}"
 }
 
 setup_all

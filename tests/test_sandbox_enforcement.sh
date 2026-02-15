@@ -31,7 +31,7 @@ _require_darwin() {
 # Helper: run a command inside sandbox-exec with our generated profile
 _sandbox_run() {
     local profile_file
-    profile_file=$(mktemp /tmp/yolobox-test-XXXXXX.sb)
+    profile_file=$(mktemp /tmp/yolobox-test-sb-XXXXXX)
 
     sandbox_generate_profile \
         "${_TEST_SANDBOX_DIR}/worktree" \
@@ -40,9 +40,18 @@ _sandbox_run() {
         > "$profile_file"
 
     local exit_code=0
-    sandbox-exec -f "$profile_file" \
-        env HOME="${_TEST_SANDBOX_DIR}/home" \
-        bash -c "$*" 2>&1 || exit_code=$?
+    (cd "${_TEST_SANDBOX_DIR}/worktree" && \
+        sandbox-exec -f "$profile_file" \
+        env -i \
+        HOME="${_TEST_SANDBOX_DIR}/home" \
+        PATH="$PATH" \
+        SHELL="${SHELL:-/bin/bash}" \
+        TERM="${TERM:-xterm-256color}" \
+        LANG="${LANG:-en_US.UTF-8}" \
+        USER="${USER:-$(whoami)}" \
+        TMPDIR="${TMPDIR:-/tmp}" \
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+        bash -c "$*" 2>&1) || exit_code=$?
 
     rm -f "$profile_file"
     return $exit_code
@@ -169,4 +178,107 @@ test_network_allowed() {
         return 1
     }
     assert_contains "$output" "Example Domain" "Should fetch example.com"
+}
+
+test_no_getcwd_errors_in_output() {
+    _require_darwin || return 2
+
+    # Verifies that sandbox output is clean — no getcwd noise from bash starting
+    # in a CWD that Seatbelt blocks. This catches regressions in the cd-to-worktree fix.
+    local output
+    output=$(_sandbox_run "echo ok")
+    assert_eq "ok" "$output" "Sandbox output should be clean (no getcwd errors)"
+}
+
+test_exec_binary_under_home_blocked() {
+    _require_darwin || return 2
+
+    # A binary under real $HOME should not be executable — Seatbelt blocks reads there.
+    # This is the security property that prevents Claude from using tools like gh/aws
+    # that happen to live under $HOME, and also blocks claude itself without whitelisting.
+    local tool_dir="${HOME}/.yolobox-test-tools-$$"
+    mkdir -p "$tool_dir"
+    printf '#!/bin/bash\necho tool-ok\n' > "${tool_dir}/yolobox-test-tool"
+    chmod +x "${tool_dir}/yolobox-test-tool"
+
+    _sandbox_run "${tool_dir}/yolobox-test-tool" 2>/dev/null && {
+        rm -rf "$tool_dir"
+        echo "  FAIL: binary under real \$HOME should not be executable without whitelist"
+        return 1
+    } || true
+
+    rm -rf "$tool_dir"
+}
+
+test_exec_binary_under_home_allowed_with_whitelist() {
+    _require_darwin || return 2
+
+    # When a $HOME subdirectory is whitelisted via extra_reads, binaries there
+    # should be executable. This is how _tool_home_dirs enables claude to run.
+    local tool_dir="${HOME}/.yolobox-test-tools-$$"
+    mkdir -p "$tool_dir"
+    printf '#!/bin/bash\necho tool-ok\n' > "${tool_dir}/yolobox-test-tool"
+    chmod +x "${tool_dir}/yolobox-test-tool"
+
+    # Generate profile with tool_dir whitelisted for reads
+    local profile_file
+    profile_file=$(mktemp /tmp/yolobox-test-sb-XXXXXX)
+    sandbox_generate_profile \
+        "${_TEST_SANDBOX_DIR}/worktree" \
+        "${_TEST_SANDBOX_DIR}/home" \
+        "${HOME}" \
+        "${tool_dir}" \
+        > "$profile_file"
+
+    local output exit_code=0
+    output=$(cd "${_TEST_SANDBOX_DIR}/worktree" && \
+        sandbox-exec -f "$profile_file" \
+        env -i \
+        HOME="${_TEST_SANDBOX_DIR}/home" \
+        PATH="${tool_dir}:${PATH}" \
+        SHELL="${SHELL:-/bin/bash}" \
+        TERM="${TERM:-xterm-256color}" \
+        LANG="${LANG:-en_US.UTF-8}" \
+        USER="${USER:-$(whoami)}" \
+        TMPDIR="${TMPDIR:-/tmp}" \
+        bash -c "${tool_dir}/yolobox-test-tool" 2>&1) || exit_code=$?
+
+    rm -f "$profile_file"
+    rm -rf "$tool_dir"
+
+    [[ $exit_code -eq 0 ]] || { echo "  FAIL: whitelisted tool should succeed (exit $exit_code)"; return 1; }
+    assert_eq "tool-ok" "$output" "Whitelisted binary under \$HOME should be executable"
+}
+
+test_env_scrubbed_no_github_token() {
+    _require_darwin || return 2
+
+    # Set a token that should NOT survive env scrubbing
+    export GITHUB_TOKEN="super-secret-token"
+
+    local output
+    output=$(_sandbox_run "echo \"\${GITHUB_TOKEN:-}\"")
+
+    # Token must be empty inside the sandbox
+    assert_eq "" "$output" "GITHUB_TOKEN should not be visible inside sandbox"
+
+    unset GITHUB_TOKEN
+}
+
+test_env_scrubbed_allowed_vars_present() {
+    _require_darwin || return 2
+
+    local output
+
+    # HOME should be the synthetic home
+    output=$(_sandbox_run "echo \$HOME")
+    assert_eq "${_TEST_SANDBOX_DIR}/home" "$output" "HOME should be set to synthetic home"
+
+    # PATH should be non-empty
+    output=$(_sandbox_run "echo \$PATH")
+    [[ -n "$output" ]] || { echo "  FAIL: PATH should be non-empty"; return 1; }
+
+    # USER should be non-empty
+    output=$(_sandbox_run "echo \$USER")
+    [[ -n "$output" ]] || { echo "  FAIL: USER should be non-empty"; return 1; }
 }

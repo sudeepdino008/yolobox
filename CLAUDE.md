@@ -7,7 +7,7 @@ Sandboxed git worktrees for running `claude --dangerously-skip-permissions` safe
 ```
 bin/yolobox            — CLI entry point, argument parsing, command dispatch
 lib/common.sh          — Logging (info/warn/die), project name detection, path helpers
-lib/config.sh          — Config parse/save/setup, access rule queries (~/.config/yolobox/config)
+lib/config.sh          — Config parse/save/setup, access rule queries (~/.config/yolobox/config) [only WORKTREE_LOC]
 lib/worktree.sh        — Git worktree create/delete/list, synthetic home setup
 lib/sandbox.sh         — OS-aware sandbox dispatcher (sources OS-specific impl)
 lib/sandbox_darwin.sh  — macOS: Seatbelt profile generation + sandbox-exec invocation
@@ -30,6 +30,8 @@ Sandbox profile generation and enforcement tests are macOS-only (skipped on Linu
 - Config is parsed manually (not sourced) for safety and to support repeated keys
 - Seatbelt profile denies writes globally, then whitelists worktree + synthetic home + /tmp
 - Seatbelt profile denies reads to real $HOME, then whitelists worktree + synthetic home
+- No git push from sandbox — push URL set to `PUSH_DISABLED_BY_YOLOBOX`, push from outside
+- Environment scrubbed via `env -i` — only HOME, PATH, SHELL, TERM, LANG, USER, TMPDIR, ANTHROPIC_API_KEY pass through
 - `allow_read` / `allow_write` config lines add extra paths to the Seatbelt profile
 - Project-scoped rules use dot notation: `allow_read.myproject=/path`
 - Synthetic home persists after `yolobox delete` (preserves .claude/ session state)

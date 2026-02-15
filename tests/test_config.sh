@@ -18,16 +18,15 @@ test_config_save_and_load() {
     YOLOBOX_CONFIG_DIR="$cfg_dir"
     YOLOBOX_CONFIG_FILE="${cfg_dir}/config"
 
-    config_save "/tmp/my-worktrees" "/home/user/.ssh/id_ed25519"
+    config_save "/tmp/my-worktrees"
 
     assert_file_exists "$YOLOBOX_CONFIG_FILE"
 
     # Reset vars then load
-    unset WORKTREE_LOC SSH_KEY_PATH
+    unset WORKTREE_LOC
     config_load
 
     assert_eq "/tmp/my-worktrees" "$WORKTREE_LOC" "WORKTREE_LOC should match"
-    assert_eq "/home/user/.ssh/id_ed25519" "$SSH_KEY_PATH" "SSH_KEY_PATH should match"
 }
 
 test_config_load_missing() {
@@ -47,13 +46,12 @@ test_config_load_incomplete() {
     YOLOBOX_CONFIG_DIR="$cfg_dir"
     YOLOBOX_CONFIG_FILE="${cfg_dir}/config"
 
-    # Write config with only WORKTREE_LOC
-    echo "WORKTREE_LOC=/tmp/wt" > "$YOLOBOX_CONFIG_FILE"
+    # Write config with no WORKTREE_LOC
+    echo "# empty config" > "$YOLOBOX_CONFIG_FILE"
 
-    unset SSH_KEY_PATH 2>/dev/null || true
     local output
     output=$(config_load 2>&1) && return 1 || true
-    assert_contains "$output" "SSH_KEY_PATH" "Should mention missing SSH_KEY_PATH"
+    assert_contains "$output" "WORKTREE_LOC" "Should mention missing WORKTREE_LOC"
 }
 
 test_config_dir_creation() {
@@ -63,7 +61,7 @@ test_config_dir_creation() {
 
     assert_file_not_exists "$cfg_dir"
 
-    config_save "/tmp/wt" "/tmp/key"
+    config_save "/tmp/wt"
 
     assert_dir_exists "$cfg_dir"
     assert_file_exists "$YOLOBOX_CONFIG_FILE"
@@ -79,7 +77,6 @@ test_config_global_allow_read() {
 
     cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
 WORKTREE_LOC=/tmp/wt
-SSH_KEY_PATH=/tmp/key
 allow_read=/usr/local/share/data
 allow_read=/opt/shared-libs
 EOF
@@ -98,7 +95,6 @@ test_config_global_allow_write() {
 
     cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
 WORKTREE_LOC=/tmp/wt
-SSH_KEY_PATH=/tmp/key
 allow_write=/tmp/shared-cache
 EOF
 
@@ -115,7 +111,6 @@ test_config_project_allow_read() {
 
     cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
 WORKTREE_LOC=/tmp/wt
-SSH_KEY_PATH=/tmp/key
 allow_read=/global/path
 allow_read.myapp=/project/specific/path
 allow_read.otherapp=/other/project/path
@@ -137,7 +132,6 @@ test_config_project_allow_write() {
 
     cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
 WORKTREE_LOC=/tmp/wt
-SSH_KEY_PATH=/tmp/key
 allow_write=/global/write
 allow_write.webapp=/webapp/output
 EOF
@@ -156,7 +150,6 @@ test_config_no_allow_rules() {
 
     cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
 WORKTREE_LOC=/tmp/wt
-SSH_KEY_PATH=/tmp/key
 EOF
 
     local reads writes
@@ -174,7 +167,6 @@ test_config_comments_ignored() {
 
     cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
 WORKTREE_LOC=/tmp/wt
-SSH_KEY_PATH=/tmp/key
 # This is a comment
 allow_read=/real/path
 # allow_read=/commented/path

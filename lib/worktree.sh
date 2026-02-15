@@ -38,6 +38,9 @@ worktree_create() {
         git -C "$repo_root" worktree add "$wt_path" -b "$branch"
     fi
 
+    # Disable push URL — commits only, push from outside the sandbox
+    git -C "$wt_path" remote set-url --push origin PUSH_DISABLED_BY_YOLOBOX
+
     # Set up synthetic home
     _setup_synthetic_home "$branch" "$hm_path"
 
@@ -50,34 +53,36 @@ _setup_synthetic_home() {
     local hm_path="$2"
     local real_home="${HOME}"
 
-    mkdir -p "${hm_path}/.claude" "${hm_path}/.ssh"
+    mkdir -p "${hm_path}/.claude"
 
-    # Symlink .gitconfig
+    # Symlink .gitconfig (needed for user.name/email in commits)
     if [[ -f "${real_home}/.gitconfig" ]]; then
         ln -sf "${real_home}/.gitconfig" "${hm_path}/.gitconfig"
     fi
 
-    # Symlink SSH key files
-    local key_name
-    key_name=$(basename "$SSH_KEY_PATH")
-    ln -sf "$SSH_KEY_PATH" "${hm_path}/.ssh/${key_name}"
-    if [[ -f "${SSH_KEY_PATH}.pub" ]]; then
-        ln -sf "${SSH_KEY_PATH}.pub" "${hm_path}/.ssh/${key_name}.pub"
-    fi
-    if [[ -f "${real_home}/.ssh/known_hosts" ]]; then
-        ln -sf "${real_home}/.ssh/known_hosts" "${hm_path}/.ssh/known_hosts"
-    fi
-    if [[ -f "${real_home}/.ssh/config" ]]; then
-        ln -sf "${real_home}/.ssh/config" "${hm_path}/.ssh/config"
+    # Copy ~/.claude.json — stores onboarding state, theme, auth method, etc.
+    # Without this, Claude Code shows the onboarding wizard in every sandbox.
+    if [[ -f "${real_home}/.claude.json" ]]; then
+        cp "${real_home}/.claude.json" "${hm_path}/.claude.json"
     fi
 
-    # Copy claude config files (these may be modified by claude in the sandbox)
-    if [[ -f "${real_home}/.claude/settings.json" ]]; then
-        cp "${real_home}/.claude/settings.json" "${hm_path}/.claude/settings.json"
-    fi
-    if [[ -f "${real_home}/.claude/CLAUDE.md" ]]; then
-        cp "${real_home}/.claude/CLAUDE.md" "${hm_path}/.claude/CLAUDE.md"
-    fi
+    # Copy all top-level claude config/state files (settings, theme, setup markers,
+    # etc.). Subdirectories are skipped — they contain session data and caches that
+    # should start fresh per worktree.
+    for f in "${real_home}/.claude/"*; do
+        [[ -f "$f" ]] || continue
+        cp "$f" "${hm_path}/.claude/"
+    done
+
+    # Copy small state subdirectories Claude Code checks during startup
+    # (onboarding state, feature flags, caches). Skip large dirs that are
+    # session-specific or should start fresh per worktree.
+    # Best-effort: some subdirs (e.g. commands/) may contain git repos with
+    # restricted pack file permissions — tolerate copy failures.
+    for d in cache commands downloads ide plugins statsig telemetry; do
+        [[ -d "${real_home}/.claude/${d}" ]] || continue
+        cp -R "${real_home}/.claude/${d}" "${hm_path}/.claude/" 2>/dev/null || true
+    done
 }
 
 worktree_delete() {

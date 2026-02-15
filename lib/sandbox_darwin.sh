@@ -78,6 +78,27 @@ SEATBELT
     fi
 }
 
+# Given a binary name and real home path, output top-level $HOME subdirectories
+# that need read access (follows symlinks). One path per line, deduplicated.
+# e.g., /Users/foo/.local/bin/claude → /Users/foo/.local
+# e.g., /Users/foo/.nvm/versions/.../bin/claude → /Users/foo/.nvm
+_tool_home_dirs() {
+    local bin_name="$1"
+    local real_home="$2"
+
+    local bin_path
+    bin_path=$(command -v "$bin_name" 2>/dev/null) || return 0
+    local real_path
+    real_path=$(realpath "$bin_path" 2>/dev/null || echo "$bin_path")
+
+    for p in "$bin_path" "$real_path"; do
+        if [[ "$p" == "${real_home}/"* ]]; then
+            local rel="${p#${real_home}/}"
+            echo "${real_home}/${rel%%/*}"
+        fi
+    done | sort -u
+}
+
 sandbox_exec_darwin() {
     local worktree_path="$1"
     local synthetic_home="$2"
@@ -85,9 +106,37 @@ sandbox_exec_darwin() {
     local extra_writes="${4:-}"
     local real_home="${HOME}"
 
+    # Auto-detect claude binary location — if installed under $HOME (e.g. ~/.local,
+    # ~/.nvm, ~/.volta), whitelist its top-level directory for Seatbelt reads.
+    local tool_dirs
+    tool_dirs=$(_tool_home_dirs "claude" "$real_home")
+    if [[ -n "$tool_dirs" ]]; then
+        while IFS= read -r d; do
+            [[ -z "$d" ]] && continue
+            info "Whitelisting ${d} for reads (claude binary location)"
+            if [[ -n "$extra_reads" ]]; then
+                extra_reads="${extra_reads}"$'\n'"${d}"
+            else
+                extra_reads="${d}"
+            fi
+        done <<< "$tool_dirs"
+    fi
+
+    # Extract OAuth token from keychain before entering the sandbox.
+    # The sandbox blocks reads to ~/Library/Keychains/, so Claude Code can't
+    # access the keychain itself. Pass the token via environment variable instead.
+    local oauth_token=""
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        local cred_json
+        cred_json=$(security find-generic-password -a "${USER}" -s "Claude Code-credentials" -w 2>/dev/null) || true
+        if [[ -n "$cred_json" ]]; then
+            oauth_token=$(echo "$cred_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('claudeAiOauth',{}).get('accessToken',''))" 2>/dev/null) || true
+        fi
+    fi
+
     # Generate profile to a temp file
     local profile_file
-    profile_file=$(mktemp /tmp/yolobox-XXXXXX.sb)
+    profile_file=$(mktemp /tmp/yolobox-sb-XXXXXX)
 
     sandbox_generate_profile "$worktree_path" "$synthetic_home" "$real_home" "$extra_reads" "$extra_writes" > "$profile_file"
 
@@ -101,13 +150,32 @@ sandbox_exec_darwin() {
     if [[ -n "$extra_writes" ]]; then
         info "Extra writes: $(echo "$extra_writes" | tr '\n' ' ')"
     fi
+    local env_list="HOME, PATH, SHELL, TERM, LANG, USER, TMPDIR"
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        env_list="${env_list}, ANTHROPIC_API_KEY"
+    elif [[ -n "$oauth_token" ]]; then
+        env_list="${env_list}, CLAUDE_CODE_OAUTH_TOKEN"
+    fi
+    info "Environment scrubbed (env -i). Passing: ${env_list}"
     echo ""
 
-    # Run sandbox-exec with overridden HOME
+    # Run sandbox-exec with scrubbed environment — only essential vars pass through.
+    # This kills GITHUB_TOKEN, GH_TOKEN, AWS_SECRET_ACCESS_KEY, NPM_TOKEN, etc.
+    # Start from worktree dir to avoid getcwd errors (Seatbelt blocks reads to real $HOME CWD).
     local exit_code=0
-    sandbox-exec -f "$profile_file" \
-        env HOME="$synthetic_home" \
-        bash -c "cd \"${worktree_path}\" && claude --dangerously-skip-permissions" \
+    (cd "$worktree_path" && \
+        sandbox-exec -f "$profile_file" \
+        env -i \
+        HOME="$synthetic_home" \
+        PATH="$PATH" \
+        SHELL="${SHELL:-/bin/bash}" \
+        TERM="${TERM:-xterm-256color}" \
+        LANG="${LANG:-en_US.UTF-8}" \
+        USER="${USER:-$(whoami)}" \
+        TMPDIR="${TMPDIR:-/tmp}" \
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
+        CLAUDE_CODE_OAUTH_TOKEN="${oauth_token}" \
+        bash -c "claude --dangerously-skip-permissions") \
         || exit_code=$?
 
     # Clean up

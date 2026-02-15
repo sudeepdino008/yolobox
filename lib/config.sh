@@ -18,7 +18,6 @@ config_load() {
         value=$(echo "$value" | xargs)
         case "$key" in
             WORKTREE_LOC) export WORKTREE_LOC="$value" ;;
-            SSH_KEY_PATH) export SSH_KEY_PATH="$value" ;;
             # allow_read / allow_write lines are parsed on demand
         esac
     done < "$YOLOBOX_CONFIG_FILE"
@@ -26,19 +25,14 @@ config_load() {
     if [[ -z "${WORKTREE_LOC:-}" ]]; then
         die "Config missing WORKTREE_LOC. Run 'yolobox setup' again."
     fi
-    if [[ -z "${SSH_KEY_PATH:-}" ]]; then
-        die "Config missing SSH_KEY_PATH. Run 'yolobox setup' again."
-    fi
 }
 
 config_save() {
     local worktree_loc="$1"
-    local ssh_key_path="$2"
 
     mkdir -p "$YOLOBOX_CONFIG_DIR"
     cat > "$YOLOBOX_CONFIG_FILE" <<EOF
 WORKTREE_LOC=${worktree_loc}
-SSH_KEY_PATH=${ssh_key_path}
 EOF
 }
 
@@ -153,31 +147,8 @@ config_setup() {
     fi
     echo ""
 
-    # Prompt for SSH key
-    local ssh_key_path
-    local default_key=""
-    for candidate in "${HOME}/.ssh/id_ed25519" "${HOME}/.ssh/id_rsa"; do
-        if [[ -f "$candidate" ]]; then
-            default_key="$candidate"
-            break
-        fi
-    done
-
-    if [[ -n "$default_key" ]]; then
-        read -r -p "SSH private key path? [$default_key]: " ssh_key_path
-        ssh_key_path="${ssh_key_path:-$default_key}"
-    else
-        read -r -p "SSH private key path: " ssh_key_path
-    fi
-    ssh_key_path="${ssh_key_path/#\~/$HOME}"
-
-    if [[ ! -f "$ssh_key_path" ]]; then
-        die "SSH key not found: $ssh_key_path"
-    fi
-    echo ""
-
     # Save
-    config_save "$worktree_loc" "$ssh_key_path"
+    config_save "$worktree_loc"
     info "Config saved to $YOLOBOX_CONFIG_FILE"
     echo ""
     info "Setup complete! You can now use:"
