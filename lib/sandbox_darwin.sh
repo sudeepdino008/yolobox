@@ -167,7 +167,7 @@ sandbox_exec_darwin() {
         sandbox-exec -f "$profile_file" \
         env -i \
         HOME="$synthetic_home" \
-        PATH="$PATH" \
+        PATH="${synthetic_home}/.local/bin:$PATH" \
         SHELL="${SHELL:-/bin/bash}" \
         TERM="${TERM:-xterm-256color}" \
         LANG="${LANG:-en_US.UTF-8}" \

@@ -124,9 +124,10 @@ yolobox and Claude Code each provide their own sandbox. When nested, the most re
 |---|---|
 | **Worktree isolation** | Work on a git worktree copy, not your original repo |
 | **`$HOME` read blocking** | Seatbelt denies reads to real `$HOME` — blocks `~/.aws/`, `~/.ssh/`, browser data, etc. |
-| **Synthetic `$HOME`** | Clean home with only `.claude/` and `.gitconfig` |
-| **Environment scrubbing** | `env -i` allowlist — kills `GITHUB_TOKEN`, `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `NPM_TOKEN`, etc. Only `HOME`, `PATH`, `SHELL`, `TERM`, `LANG`, `USER`, `TMPDIR`, `ANTHROPIC_API_KEY` pass through |
-| **Push blocking** | Push URL set to `PUSH_DISABLED_BY_YOLOBOX` — `git push` fails, `git fetch`/`pull` still work |
+| **Synthetic `$HOME`** | Clean home with `.claude/` state, `.gitconfig`, and onboarding data |
+| **Environment scrubbing** | `env -i` allowlist — kills `GITHUB_TOKEN`, `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `NPM_TOKEN`, etc. Only essential vars pass through |
+| **Auth forwarding** | OAuth token extracted from macOS keychain and passed via `CLAUDE_CODE_OAUTH_TOKEN` (keychain is inaccessible inside sandbox) |
+| **Push blocking** | `git push` disabled inside sandbox via `GIT_CONFIG_*` env vars — works normally from host |
 
 **What Claude Code's built-in sandbox adds:**
 
@@ -148,7 +149,7 @@ yolobox and Claude Code each provide their own sandbox. When nested, the most re
 
 **Residual risks:**
 - Damage within the worktree itself (full write access there)
-- ANTHROPIC_API_KEY is passed through (required for Claude Code to function)
+- `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` is passed through (required for Claude Code to function)
 
 ---
 

@@ -57,6 +57,12 @@ _setup_synthetic_home() {
         ln -sf "${real_home}/.gitconfig" "${hm_path}/.gitconfig"
     fi
 
+    # Symlink .local (Claude Code native install lives at ~/.local/bin/claude
+    # and checks $HOME/.local when installMethod is "native")
+    if [[ -d "${real_home}/.local" ]]; then
+        ln -sf "${real_home}/.local" "${hm_path}/.local"
+    fi
+
     # Copy ~/.claude.json — stores onboarding state, theme, auth method, etc.
     # Without this, Claude Code shows the onboarding wizard in every sandbox.
     if [[ -f "${real_home}/.claude.json" ]]; then
@@ -80,6 +86,20 @@ _setup_synthetic_home() {
         [[ -d "${real_home}/.claude/${d}" ]] || continue
         cp -R "${real_home}/.claude/${d}" "${hm_path}/.claude/" 2>/dev/null || true
     done
+
+    # Auto-accept the bypass permissions prompt so the sandbox session starts
+    # without manual intervention. This is safe because yolobox IS the sandbox.
+    local settings="${hm_path}/.claude/settings.json"
+    if [[ -f "$settings" ]]; then
+        python3 -c "
+import json, sys
+with open(sys.argv[1]) as f: d = json.load(f)
+d['skipDangerousModePermissionPrompt'] = True
+with open(sys.argv[1], 'w') as f: json.dump(d, f, indent=2)
+" "$settings"
+    else
+        echo '{"skipDangerousModePermissionPrompt":true}' > "$settings"
+    fi
 }
 
 worktree_delete() {

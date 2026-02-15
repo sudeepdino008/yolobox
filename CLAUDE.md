@@ -30,8 +30,11 @@ Sandbox profile generation and enforcement tests are macOS-only (skipped on Linu
 - Config is parsed manually (not sourced) for safety and to support repeated keys
 - Seatbelt profile denies writes globally, then whitelists worktree + synthetic home + /tmp
 - Seatbelt profile denies reads to real $HOME, then whitelists worktree + synthetic home
-- No git push from sandbox — push URL set to `PUSH_DISABLED_BY_YOLOBOX`, push from outside
-- Environment scrubbed via `env -i` — only HOME, PATH, SHELL, TERM, LANG, USER, TMPDIR, ANTHROPIC_API_KEY pass through
+- No git push from sandbox — `GIT_CONFIG_*` env vars override push URL inside sandbox only
+- Environment scrubbed via `env -i` — only essential vars pass through
+- OAuth token extracted from macOS keychain pre-sandbox, passed via `CLAUDE_CODE_OAUTH_TOKEN`
+- `~/.claude.json` copied to synthetic home (onboarding state, theme, auth method)
+- Small `~/.claude/` subdirectories (statsig, cache, commands, etc.) copied best-effort
 - `allow_read` / `allow_write` config lines add extra paths to the Seatbelt profile
 - Project-scoped rules use dot notation: `allow_read.myproject=/path`
 - Synthetic home persists after `yolobox delete` (preserves .claude/ session state)
