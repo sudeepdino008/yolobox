@@ -175,6 +175,9 @@ sandbox_exec_darwin() {
         TMPDIR="${TMPDIR:-/tmp}" \
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
         CLAUDE_CODE_OAUTH_TOKEN="${oauth_token}" \
+        GIT_CONFIG_COUNT=1 \
+        GIT_CONFIG_KEY_0="remote.origin.pushurl" \
+        GIT_CONFIG_VALUE_0="PUSH_DISABLED_BY_YOLOBOX" \
         bash -c "claude --dangerously-skip-permissions") \
         || exit_code=$?
 

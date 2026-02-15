@@ -72,14 +72,19 @@ test_03_synthetic_home_contents() {
     fi
 }
 
-test_03b_push_url_disabled() {
+test_03b_push_url_not_modified() {
+    # Push URL should NOT be modified at the worktree level — push is only
+    # disabled inside the sandbox via GIT_CONFIG_* environment variables.
     local project
     project=$(detect_project_name)
     local wt_path="${_TEST_WT_DIR}/${project}.worktrees/test-yolobox-wt-1"
 
     local push_url
     push_url=$(git -C "$wt_path" remote get-url --push origin)
-    assert_eq "PUSH_DISABLED_BY_YOLOBOX" "$push_url" "Push URL should be disabled"
+    if [[ "$push_url" == "PUSH_DISABLED_BY_YOLOBOX" ]]; then
+        echo "  FAIL: Push URL should not be overridden in worktree"
+        return 1
+    fi
 }
 
 test_04_create_duplicate() {

@@ -38,9 +38,6 @@ worktree_create() {
         git -C "$repo_root" worktree add "$wt_path" -b "$branch"
     fi
 
-    # Disable push URL — commits only, push from outside the sandbox
-    git -C "$wt_path" remote set-url --push origin PUSH_DISABLED_BY_YOLOBOX
-
     # Set up synthetic home
     _setup_synthetic_home "$branch" "$hm_path"
 
