@@ -76,3 +76,54 @@ test_profile_allows_dev_null() {
     assert_contains "$profile" '"/dev/null"' "Profile should allow /dev/null"
     assert_contains "$profile" '"/dev/tty"' "Profile should allow /dev/tty"
 }
+
+# ---- Extra access rule injection ----
+
+test_profile_extra_read_paths() {
+    _require_darwin || return 2
+
+    local extra_reads
+    extra_reads=$(printf '/extra/read/one\n/extra/read/two')
+
+    local profile
+    profile=$(sandbox_generate_profile "/tmp/wt" "/tmp/home" "/Users/alice" "$extra_reads" "")
+
+    assert_contains "$profile" "Extra read paths from config" "Should have read comment"
+    assert_contains "$profile" '(subpath "/extra/read/one")' "Should contain first extra read"
+    assert_contains "$profile" '(subpath "/extra/read/two")' "Should contain second extra read"
+    assert_contains "$profile" "(allow file-read*" "Should have allow file-read for extras"
+}
+
+test_profile_extra_write_paths() {
+    _require_darwin || return 2
+
+    local extra_writes
+    extra_writes=$(printf '/extra/write/one\n/extra/write/two')
+
+    local profile
+    profile=$(sandbox_generate_profile "/tmp/wt" "/tmp/home" "/Users/alice" "" "$extra_writes")
+
+    assert_contains "$profile" "Extra write paths from config" "Should have write comment"
+    assert_contains "$profile" '(subpath "/extra/write/one")' "Should contain first extra write"
+    assert_contains "$profile" '(subpath "/extra/write/two")' "Should contain second extra write"
+}
+
+test_profile_no_extras_when_empty() {
+    _require_darwin || return 2
+
+    local profile
+    profile=$(sandbox_generate_profile "/tmp/wt" "/tmp/home" "/Users/alice" "" "")
+
+    assert_not_contains "$profile" "Extra read paths" "Should NOT have extra read section"
+    assert_not_contains "$profile" "Extra write paths" "Should NOT have extra write section"
+}
+
+test_profile_both_extras() {
+    _require_darwin || return 2
+
+    local profile
+    profile=$(sandbox_generate_profile "/tmp/wt" "/tmp/home" "/Users/alice" "/read/path" "/write/path")
+
+    assert_contains "$profile" '(subpath "/read/path")' "Should contain extra read"
+    assert_contains "$profile" '(subpath "/write/path")' "Should contain extra write"
+}

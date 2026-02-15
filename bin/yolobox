@@ -90,7 +90,15 @@ cmd_attach() {
         _setup_synthetic_home "$selected" "$hm_path"
     fi
 
-    sandbox_exec "$wt_path" "$hm_path"
+    # Gather extra access rules from config (global + project-specific)
+    local project
+    project=$(detect_project_name)
+    local extra_reads
+    extra_reads=$(config_get_allow_reads "$project")
+    local extra_writes
+    extra_writes=$(config_get_allow_writes "$project")
+
+    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes"
 }
 
 cmd_list() {

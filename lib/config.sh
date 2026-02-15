@@ -9,8 +9,19 @@ config_load() {
         die "No config found. Run 'yolobox setup' first."
     fi
 
-    # shellcheck source=/dev/null
-    source "$YOLOBOX_CONFIG_FILE"
+    # Parse config manually (don't source — safer, supports repeated keys)
+    while IFS='=' read -r key value; do
+        # Skip comments and blank lines
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        # Trim whitespace
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        case "$key" in
+            WORKTREE_LOC) export WORKTREE_LOC="$value" ;;
+            SSH_KEY_PATH) export SSH_KEY_PATH="$value" ;;
+            # allow_read / allow_write lines are parsed on demand
+        esac
+    done < "$YOLOBOX_CONFIG_FILE"
 
     if [[ -z "${WORKTREE_LOC:-}" ]]; then
         die "Config missing WORKTREE_LOC. Run 'yolobox setup' again."
@@ -29,6 +40,52 @@ config_save() {
 WORKTREE_LOC=${worktree_loc}
 SSH_KEY_PATH=${ssh_key_path}
 EOF
+}
+
+# Get extra allowed read paths (global + project-specific).
+# Outputs one path per line.
+# Usage: config_get_allow_reads [project_name]
+config_get_allow_reads() {
+    local project="${1:-}"
+    [[ -f "$YOLOBOX_CONFIG_FILE" ]] || return 0
+
+    while IFS='=' read -r key value; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        [[ -z "$value" ]] && continue
+        # Global: allow_read=/path
+        if [[ "$key" == "allow_read" ]]; then
+            echo "$value"
+        fi
+        # Project-specific: allow_read.myproject=/path
+        if [[ -n "$project" && "$key" == "allow_read.${project}" ]]; then
+            echo "$value"
+        fi
+    done < "$YOLOBOX_CONFIG_FILE"
+}
+
+# Get extra allowed write paths (global + project-specific).
+# Outputs one path per line.
+# Usage: config_get_allow_writes [project_name]
+config_get_allow_writes() {
+    local project="${1:-}"
+    [[ -f "$YOLOBOX_CONFIG_FILE" ]] || return 0
+
+    while IFS='=' read -r key value; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        [[ -z "$value" ]] && continue
+        # Global: allow_write=/path
+        if [[ "$key" == "allow_write" ]]; then
+            echo "$value"
+        fi
+        # Project-specific: allow_write.myproject=/path
+        if [[ -n "$project" && "$key" == "allow_write.${project}" ]]; then
+            echo "$value"
+        fi
+    done < "$YOLOBOX_CONFIG_FILE"
 }
 
 config_check_deps() {

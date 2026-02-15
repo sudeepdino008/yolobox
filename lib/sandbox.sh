@@ -21,12 +21,15 @@ case "$YOLOBOX_OS" in
 esac
 
 # Unified interface
+# Args: worktree_path synthetic_home [extra_reads] [extra_writes]
 sandbox_exec() {
     local worktree_path="$1"
     local synthetic_home="$2"
+    local extra_reads="${3:-}"
+    local extra_writes="${4:-}"
 
     case "$YOLOBOX_OS" in
-        Darwin) sandbox_exec_darwin "$worktree_path" "$synthetic_home" ;;
+        Darwin) sandbox_exec_darwin "$worktree_path" "$synthetic_home" "$extra_reads" "$extra_writes" ;;
         Linux)  sandbox_exec_linux "$worktree_path" "$synthetic_home" ;;
     esac
 }
