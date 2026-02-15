@@ -116,10 +116,6 @@ allow_write.my-app=/path/to/output-dir
 
 ## Security Model
 
-yolobox and Claude Code each provide their own sandbox. When nested, the most restrictive rule from each layer wins.
-
-**What yolobox adds** (not provided by Claude Code's built-in sandbox):
-
 | Layer | Mechanism |
 |---|---|
 | **Worktree isolation** | Work on a git worktree copy, not your original repo |
@@ -128,24 +124,6 @@ yolobox and Claude Code each provide their own sandbox. When nested, the most re
 | **Environment scrubbing** | `env -i` allowlist — kills `GITHUB_TOKEN`, `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `NPM_TOKEN`, etc. Only essential vars pass through |
 | **Auth forwarding** | OAuth token extracted from macOS keychain and passed via `CLAUDE_CODE_OAUTH_TOKEN` (keychain is inaccessible inside sandbox) |
 | **Push blocking** | `git push` disabled inside sandbox via `GIT_CONFIG_*` env vars — works normally from host |
-
-**What Claude Code's built-in sandbox adds:**
-
-| Layer | Mechanism |
-|---|---|
-| **Write restrictions** | Limits writes to CWD and approved paths |
-| **Network domain allowlisting** | Proxy restricts outbound connections to approved domains |
-
-**Combined effect:**
-
-| Access | Policy |
-|---|---|
-| **Filesystem writes** | Worktree + synthetic `$HOME` + `/tmp` only (yolobox Seatbelt) |
-| **Filesystem reads** | Real `$HOME` blocked (yolobox), system paths allowed |
-| **Network** | Domain-restricted by Claude Code's proxy |
-| **Environment** | Scrubbed — no credentials leak in |
-| **Git push** | Disabled — commit locally, push from outside |
-| **Processes** | Full access (Claude can run git, npm, etc.) |
 
 **Residual risks:**
 - Damage within the worktree itself (full write access there)
