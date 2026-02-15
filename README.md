@@ -135,5 +135,5 @@ allow_write.my-app=/path/to/output-dir
 
 | Platform | Status | Mechanism |
 |---|---|---|
-| macOS | Supported | `sandbox-exec` (Seatbelt) |
-| Linux | Planned | `bubblewrap` (bwrap with setgid) |
+| macOS | ✅ Supported | `sandbox-exec` (Seatbelt) |
+| Linux | 🚧 Planned | `bubblewrap` (bwrap with setgid) |
