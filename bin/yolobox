@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# yolobox — sandboxed git worktrees for claude code
+#
+# Usage:
+#   yolobox setup                 — one-time configuration
+#   yolobox create <branch_name>  — create a sandboxed worktree
+#   yolobox attach                — pick a worktree with fzf and launch claude
+#   yolobox list                  — show all worktrees
+#   yolobox delete <branch_name>  — remove a worktree (keeps session state)
+
+set -euo pipefail
+
+# Resolve lib directory relative to this script
+YOLOBOX_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+YOLOBOX_LIB_DIR="${YOLOBOX_BIN_DIR}/../lib"
+
+# Source libraries
+# shellcheck source=../lib/common.sh
+source "${YOLOBOX_LIB_DIR}/common.sh"
+# shellcheck source=../lib/config.sh
+source "${YOLOBOX_LIB_DIR}/config.sh"
+# shellcheck source=../lib/sandbox.sh
+source "${YOLOBOX_LIB_DIR}/sandbox.sh"
+# shellcheck source=../lib/worktree.sh
+source "${YOLOBOX_LIB_DIR}/worktree.sh"
+
+usage() {
+    echo "Usage: yolobox <command> [args]"
+    echo ""
+    echo "Commands:"
+    echo "  setup                 One-time configuration (deps, paths, SSH key)"
+    echo "  create <branch_name>  Create a sandboxed worktree"
+    echo "  attach                Pick a worktree with fzf and launch claude in sandbox"
+    echo "  list                  Show all worktrees for the current project"
+    echo "  delete <branch_name>  Remove a worktree (session state is preserved)"
+    echo ""
+    echo "Run 'yolobox setup' first to configure."
+}
+
+cmd_setup() {
+    config_setup
+}
+
+cmd_create() {
+    if [[ $# -lt 1 ]]; then
+        die "Usage: yolobox create <branch_name>"
+    fi
+    config_load
+    worktree_create "$1"
+}
+
+cmd_attach() {
+    config_load
+
+    local wt_base
+    wt_base=$(worktrees_base)
+
+    if [[ ! -d "$wt_base" ]]; then
+        die "No worktrees found. Run 'yolobox create <branch_name>' first."
+    fi
+
+    # Gather branch names
+    local branches=()
+    for dir in "$wt_base"/*/; do
+        [[ -d "$dir" ]] || continue
+        branches+=("$(basename "$dir")")
+    done
+
+    if [[ ${#branches[@]} -eq 0 ]]; then
+        die "No worktrees found. Run 'yolobox create <branch_name>' first."
+    fi
+
+    # If only one worktree, select it directly
+    local selected
+    if [[ ${#branches[@]} -eq 1 ]]; then
+        selected="${branches[0]}"
+        info "Only one worktree found, selecting '${selected}'"
+    else
+        # Use fzf to pick
+        selected=$(printf '%s\n' "${branches[@]}" | fzf --prompt="Select worktree: " --height=10 --reverse) || die "No worktree selected."
+    fi
+
+    local wt_path
+    wt_path=$(worktree_path "$selected")
+    local hm_path
+    hm_path=$(home_path "$selected")
+
+    if [[ ! -d "$hm_path" ]]; then
+        warn "Synthetic home missing, recreating..."
+        _setup_synthetic_home "$selected" "$hm_path"
+    fi
+
+    sandbox_exec "$wt_path" "$hm_path"
+}
+
+cmd_list() {
+    config_load
+    worktree_list
+}
+
+cmd_delete() {
+    if [[ $# -lt 1 ]]; then
+        die "Usage: yolobox delete <branch_name>"
+    fi
+    config_load
+    worktree_delete "$1"
+}
+
+# Main dispatcher
+if [[ $# -lt 1 ]]; then
+    usage
+    exit 1
+fi
+
+command="$1"
+shift
+
+case "$command" in
+    setup)  cmd_setup "$@" ;;
+    create) cmd_create "$@" ;;
+    attach) cmd_attach "$@" ;;
+    list)   cmd_list "$@" ;;
+    delete) cmd_delete "$@" ;;
+    help|-h|--help)
+        usage
+        exit 0
+        ;;
+    *)
+        die "Unknown command: $command. Run 'yolobox help' for usage."
+        ;;
+esac
