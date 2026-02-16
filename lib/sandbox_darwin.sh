@@ -128,33 +128,50 @@ _traversal_dirs() {
     echo "$real_home"
 }
 
-# Load PF anchor blocking RFC 1918 + link-local ranges.
+# Load PF rules blocking RFC 1918 + link-local ranges.
 # Uses a per-PID anchor so multiple sessions don't collide.
+# The main ruleset must reference the anchor for it to be evaluated,
+# so we prepend 'anchor "yolobox/*"' to the active rules if missing.
 # Args: pid
 _pf_block_lan() {
     local pid="$1"
     local anchor="yolobox/${pid}"
 
-    local rules
-    rules=$(mktemp /tmp/yolobox-pf-XXXXXX)
-    cat > "$rules" <<'PFRULES'
-table <yolobox_lan> { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
-block return out quick from any to <yolobox_lan>
-PFRULES
-
     info "Enabling LAN blocking (PF anchor: ${anchor})"
-    sudo pfctl -a "$anchor" -f "$rules" 2>/dev/null
+
+    # Load block rules into our anchor
+    echo 'block return out quick from any to { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }' \
+        | sudo pfctl -a "$anchor" -f - 2>/dev/null
+
+    # Main ruleset must reference our anchor for it to be evaluated.
+    # Prepend anchor directive to current rules (skip if already present).
+    if ! sudo pfctl -sr 2>/dev/null | grep -qF 'anchor "yolobox/*"'; then
+        {
+            echo 'anchor "yolobox/*"'
+            sudo pfctl -sr 2>/dev/null
+        } | sudo pfctl -f - 2>/dev/null
+    fi
+
     sudo pfctl -e 2>/dev/null || true
-    rm -f "$rules"
 }
 
-# Flush the PF anchor to remove LAN blocking rules.
+# Flush the PF anchor and remove anchor directive from main rules
+# if no other yolobox anchors remain.
 # Args: pid
 _pf_unblock_lan() {
     local pid="$1"
     local anchor="yolobox/${pid}"
 
+    # Flush our anchor's rules
     sudo pfctl -a "$anchor" -F all 2>/dev/null || true
+
+    # Remove anchor directive from main rules if no yolobox anchors remain
+    local remaining
+    remaining=$(sudo pfctl -s Anchors 2>/dev/null | grep -c '^yolobox/' || true)
+    if [[ "$remaining" -eq 0 ]]; then
+        sudo pfctl -sr 2>/dev/null | grep -vF 'anchor "yolobox/*"' \
+            | sudo pfctl -f - 2>/dev/null || true
+    fi
 }
 
 sandbox_exec_darwin() {
