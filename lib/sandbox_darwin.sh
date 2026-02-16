@@ -139,7 +139,7 @@ _pf_block_lan() {
     rules=$(mktemp /tmp/yolobox-pf-XXXXXX)
     cat > "$rules" <<'PFRULES'
 table <yolobox_lan> { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
-block out quick from any to <yolobox_lan>
+block return out quick from any to <yolobox_lan>
 PFRULES
 
     info "Enabling LAN blocking (PF anchor: ${anchor})"
