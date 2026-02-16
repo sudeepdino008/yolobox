@@ -2,14 +2,15 @@
 # sandbox_darwin.sh — macOS sandbox-exec (Seatbelt) implementation
 
 # Generate a Seatbelt profile.
-# Args: worktree_path synthetic_home real_home [extra_read_paths] [extra_write_paths]
-#   extra_read_paths and extra_write_paths are newline-delimited strings of paths.
+# Args: worktree_path synthetic_home real_home [extra_read_paths] [extra_write_paths] [traversal_dirs]
+#   extra_read_paths, extra_write_paths, and traversal_dirs are newline-delimited strings of paths.
 sandbox_generate_profile() {
     local worktree_path="$1"
     local synthetic_home="$2"
     local real_home="$3"
     local extra_reads="${4:-}"
     local extra_writes="${5:-}"
+    local traversal_dirs="${6:-}"
 
     cat <<SEATBELT
 (version 1)
@@ -76,6 +77,19 @@ SEATBELT
             echo "  (subpath \"${p}\"))"
         done <<< "$extra_reads"
     fi
+
+    # Allow stat() on intermediate directories for path traversal to whitelisted
+    # paths under real home (e.g. parent repo .git). Only metadata — no data reads.
+    if [[ -n "$traversal_dirs" ]]; then
+        echo ""
+        echo ";; Allow path traversal (stat only) to reach whitelisted paths"
+        echo "(allow file-read-metadata"
+        while IFS= read -r p; do
+            [[ -z "$p" ]] && continue
+            echo "  (literal \"${p}\")"
+        done <<< "$traversal_dirs"
+        echo ")"
+    fi
 }
 
 # Given a binary name and real home path, output top-level $HOME subdirectories
@@ -97,6 +111,21 @@ _tool_home_dirs() {
             echo "${real_home}/${rel%%/*}"
         fi
     done | sort -u
+}
+
+# Output intermediate directories between a whitelisted path and real_home
+# (inclusive of real_home). Used to allow stat() traversal through Seatbelt's
+# read-deny on $HOME. Outputs nothing if path is not under real_home.
+_traversal_dirs() {
+    local path="$1"
+    local real_home="$2"
+    [[ "$path" == "${real_home}/"* ]] || return 0
+    local dir="${path%/*}"
+    while [[ "$dir" == "${real_home}"* && "$dir" != "${real_home}" ]]; do
+        echo "$dir"
+        dir="${dir%/*}"
+    done
+    echo "$real_home"
 }
 
 sandbox_exec_darwin() {
@@ -122,6 +151,45 @@ sandbox_exec_darwin() {
         done <<< "$tool_dirs"
     fi
 
+    # Git worktrees have a .git file pointing to the parent repo's
+    # .git/worktrees/<name> directory. Whitelist the parent .git dir for
+    # reads and writes (objects, refs, config, worktree state).
+    local parent_gitdir=""
+    local git_file="${worktree_path}/.git"
+    if [[ -f "$git_file" ]]; then
+        local gitdir
+        gitdir=$(sed -n 's/^gitdir: //p' "$git_file")
+        if [[ -n "$gitdir" ]]; then
+            # Resolve worktree-specific dir (.git/worktrees/<name>),
+            # then go up two levels to the .git root
+            parent_gitdir=$(cd "$worktree_path" && cd "$gitdir" && cd ../.. && pwd)
+
+            info "Whitelisting ${parent_gitdir} for reads+writes (parent .git)"
+            if [[ -n "$extra_reads" ]]; then
+                extra_reads="${extra_reads}"$'\n'"${parent_gitdir}"
+            else
+                extra_reads="${parent_gitdir}"
+            fi
+            if [[ -n "$extra_writes" ]]; then
+                extra_writes="${extra_writes}"$'\n'"${parent_gitdir}"
+            else
+                extra_writes="${parent_gitdir}"
+            fi
+        fi
+    fi
+
+    # Collect traversal dirs for all whitelisted paths under real home.
+    # Seatbelt blocks reads to $HOME, so git's getcwd() canonicalization
+    # needs file-read-metadata on intermediate path components.
+    local traversal_dirs
+    traversal_dirs=$({
+        _traversal_dirs "$worktree_path" "$real_home"
+        _traversal_dirs "$synthetic_home" "$real_home"
+        if [[ -n "$parent_gitdir" ]]; then
+            _traversal_dirs "$parent_gitdir" "$real_home"
+        fi
+    } | sort -u)
+
     # Extract OAuth token from keychain before entering the sandbox.
     # The sandbox blocks reads to ~/Library/Keychains/, so Claude Code can't
     # access the keychain itself. Pass the token via environment variable instead.
@@ -138,7 +206,7 @@ sandbox_exec_darwin() {
     local profile_file
     profile_file=$(mktemp /tmp/yolobox-sb-XXXXXX)
 
-    sandbox_generate_profile "$worktree_path" "$synthetic_home" "$real_home" "$extra_reads" "$extra_writes" > "$profile_file"
+    sandbox_generate_profile "$worktree_path" "$synthetic_home" "$real_home" "$extra_reads" "$extra_writes" "$traversal_dirs" > "$profile_file"
 
     info "Starting sandboxed session..."
     info "Worktree: ${worktree_path}"

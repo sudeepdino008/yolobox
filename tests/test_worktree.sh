@@ -66,9 +66,9 @@ test_03_synthetic_home_contents() {
     project=$(detect_project_name)
     local hm_path="${_TEST_WT_DIR}/${project}.homes/test-yolobox-wt-1"
 
-    # .gitconfig should be symlinked (if real one exists)
+    # .gitconfig should be copied (not symlinked — symlink target blocked by Seatbelt)
     if [[ -f "${HOME}/.gitconfig" ]]; then
-        assert_symlink "${hm_path}/.gitconfig"
+        assert_file_exists "${hm_path}/.gitconfig"
     fi
 }
 

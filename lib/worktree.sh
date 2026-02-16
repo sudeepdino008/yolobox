@@ -52,9 +52,10 @@ _setup_synthetic_home() {
 
     mkdir -p "${hm_path}/.claude"
 
-    # Symlink .gitconfig (needed for user.name/email in commits)
+    # Copy .gitconfig (needed for user.name/email in commits).
+    # Must copy, not symlink — symlink target is in real $HOME which Seatbelt blocks.
     if [[ -f "${real_home}/.gitconfig" ]]; then
-        ln -sf "${real_home}/.gitconfig" "${hm_path}/.gitconfig"
+        cp "${real_home}/.gitconfig" "${hm_path}/.gitconfig"
     fi
 
     # Symlink .local (Claude Code native install lives at ~/.local/bin/claude
