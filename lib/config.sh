@@ -18,7 +18,8 @@ config_load() {
         value=$(echo "$value" | xargs)
         case "$key" in
             WORKTREE_LOC) export WORKTREE_LOC="$value" ;;
-            # allow_read / allow_write lines are parsed on demand
+            block_lan) export BLOCK_LAN="$value" ;;
+            # allow_read / allow_write / block_lan.* lines are parsed on demand
         esac
     done < "$YOLOBOX_CONFIG_FILE"
 
@@ -80,6 +81,32 @@ config_get_allow_writes() {
             echo "$value"
         fi
     done < "$YOLOBOX_CONFIG_FILE"
+}
+
+# Check if block_lan is enabled (global or project-specific).
+# Returns "true" if either global block_lan=true or block_lan.<project>=true.
+# Usage: config_get_block_lan [project_name]
+config_get_block_lan() {
+    local project="${1:-}"
+
+    # Check global setting first (parsed in config_load)
+    if [[ "${BLOCK_LAN:-}" == "true" ]]; then
+        echo "true"
+        return 0
+    fi
+
+    # Check project-specific setting
+    if [[ -n "$project" && -f "$YOLOBOX_CONFIG_FILE" ]]; then
+        while IFS='=' read -r key value; do
+            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            if [[ "$key" == "block_lan.${project}" && "$value" == "true" ]]; then
+                echo "true"
+                return 0
+            fi
+        done < "$YOLOBOX_CONFIG_FILE"
+    fi
 }
 
 config_check_deps() {

@@ -159,6 +159,67 @@ EOF
     assert_eq "" "$writes" "Should have no extra writes"
 }
 
+# ---- block_lan tests ----
+
+test_config_block_lan_global() {
+    local cfg_dir="${_TEST_CONFIG_DIR}/block_lan_global"
+    mkdir -p "$cfg_dir"
+    YOLOBOX_CONFIG_DIR="$cfg_dir"
+    YOLOBOX_CONFIG_FILE="${cfg_dir}/config"
+
+    cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
+WORKTREE_LOC=/tmp/wt
+block_lan=true
+EOF
+
+    unset BLOCK_LAN
+    config_load
+
+    local result
+    result=$(config_get_block_lan)
+    assert_eq "true" "$result" "Global block_lan should return true"
+}
+
+test_config_block_lan_project() {
+    local cfg_dir="${_TEST_CONFIG_DIR}/block_lan_project"
+    mkdir -p "$cfg_dir"
+    YOLOBOX_CONFIG_DIR="$cfg_dir"
+    YOLOBOX_CONFIG_FILE="${cfg_dir}/config"
+
+    cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
+WORKTREE_LOC=/tmp/wt
+block_lan.myapp=true
+EOF
+
+    unset BLOCK_LAN
+    config_load
+
+    local result
+    result=$(config_get_block_lan "myapp")
+    assert_eq "true" "$result" "Project block_lan should return true for myapp"
+
+    result=$(config_get_block_lan "otherapp")
+    assert_eq "" "$result" "Project block_lan should be empty for otherapp"
+}
+
+test_config_block_lan_default_off() {
+    local cfg_dir="${_TEST_CONFIG_DIR}/block_lan_off"
+    mkdir -p "$cfg_dir"
+    YOLOBOX_CONFIG_DIR="$cfg_dir"
+    YOLOBOX_CONFIG_FILE="${cfg_dir}/config"
+
+    cat > "$YOLOBOX_CONFIG_FILE" <<'EOF'
+WORKTREE_LOC=/tmp/wt
+EOF
+
+    unset BLOCK_LAN
+    config_load
+
+    local result
+    result=$(config_get_block_lan "myapp")
+    assert_eq "" "$result" "block_lan should be empty when not configured"
+}
+
 test_config_comments_ignored() {
     local cfg_dir="${_TEST_CONFIG_DIR}/comments"
     mkdir -p "$cfg_dir"

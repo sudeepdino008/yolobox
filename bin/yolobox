@@ -102,8 +102,10 @@ _attach_or_shell() {
     extra_reads=$(config_get_allow_reads "$project")
     local extra_writes
     extra_writes=$(config_get_allow_writes "$project")
+    local block_lan
+    block_lan=$(config_get_block_lan "$project")
 
-    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd"
+    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd" "$block_lan"
 }
 
 cmd_attach() {

@@ -107,12 +107,17 @@ allow_write=/tmp/shared-cache
 # Project-specific — only when working on that repo
 allow_read.my-app=/path/to/shared-lib
 allow_write.my-app=/path/to/output-dir
+
+# Block LAN access (RFC 1918 + link-local) while keeping internet
+block_lan=true                  # global
+block_lan.my-app=true           # project-specific
 ```
 
 - One path per line, multiple entries allowed
 - Global rules (`allow_read`, `allow_write`) apply to every sandbox session
 - Project rules (`allow_read.<project>`, `allow_write.<project>`) only apply when the repo name matches
 - Project name is derived from `git remote get-url origin` (falls back to directory name)
+- `block_lan` uses macOS PF (packet filter) to block traffic to private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16). Internet access (Claude API, npm, etc.) is unaffected. Requires `sudo` — you'll be prompted on attach
 
 ---
 
@@ -126,6 +131,7 @@ allow_write.my-app=/path/to/output-dir
 | **Environment scrubbing** | `env -i` allowlist — kills `GITHUB_TOKEN`, `GH_TOKEN`, `AWS_SECRET_ACCESS_KEY`, `NPM_TOKEN`, etc. Only essential vars pass through |
 | **Auth forwarding** | OAuth token extracted from macOS keychain and passed via `CLAUDE_CODE_OAUTH_TOKEN` (keychain is inaccessible inside sandbox) |
 | **Push blocking** | `git push` disabled inside sandbox via `GIT_CONFIG_*` env vars — works normally from host |
+| **LAN blocking** | Optional `block_lan` — PF firewall blocks RFC 1918 + link-local ranges, internet stays open |
 
 **Residual risks:**
 - Damage within the worktree itself (full write access there)

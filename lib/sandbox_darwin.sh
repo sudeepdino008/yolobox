@@ -128,12 +128,42 @@ _traversal_dirs() {
     echo "$real_home"
 }
 
+# Load PF anchor blocking RFC 1918 + link-local ranges.
+# Uses a per-PID anchor so multiple sessions don't collide.
+# Args: pid
+_pf_block_lan() {
+    local pid="$1"
+    local anchor="yolobox/${pid}"
+
+    local rules
+    rules=$(mktemp /tmp/yolobox-pf-XXXXXX)
+    cat > "$rules" <<'PFRULES'
+table <yolobox_lan> { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 }
+block out quick from any to <yolobox_lan>
+PFRULES
+
+    info "Enabling LAN blocking (PF anchor: ${anchor})"
+    sudo pfctl -a "$anchor" -f "$rules" 2>/dev/null
+    sudo pfctl -e 2>/dev/null || true
+    rm -f "$rules"
+}
+
+# Flush the PF anchor to remove LAN blocking rules.
+# Args: pid
+_pf_unblock_lan() {
+    local pid="$1"
+    local anchor="yolobox/${pid}"
+
+    sudo pfctl -a "$anchor" -F all 2>/dev/null || true
+}
+
 sandbox_exec_darwin() {
     local worktree_path="$1"
     local synthetic_home="$2"
     local extra_reads="${3:-}"
     local extra_writes="${4:-}"
     local sandbox_cmd="${5:-claude --dangerously-skip-permissions}"
+    local block_lan="${6:-}"
     local real_home="${HOME}"
 
     # Auto-detect claude binary location — if installed under $HOME (e.g. ~/.local,
@@ -220,6 +250,9 @@ sandbox_exec_darwin() {
     if [[ -n "$extra_writes" ]]; then
         info "Extra writes: $(echo "$extra_writes" | tr '\n' ' ')"
     fi
+    if [[ "$block_lan" == "true" ]]; then
+        info "LAN blocking: enabled (PF)"
+    fi
     local env_list="HOME, PATH, SHELL, TERM, LANG, USER, TMPDIR"
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         env_list="${env_list}, ANTHROPIC_API_KEY"
@@ -228,6 +261,13 @@ sandbox_exec_darwin() {
     fi
     info "Environment scrubbed (env -i). Passing: ${env_list}"
     echo ""
+
+    # Set up PF LAN blocking if requested
+    local pf_pid=$$
+    if [[ "$block_lan" == "true" ]]; then
+        _pf_block_lan "$pf_pid"
+        trap '_pf_unblock_lan '"$pf_pid" EXIT INT TERM
+    fi
 
     # Run sandbox-exec with scrubbed environment — only essential vars pass through.
     # This kills GITHUB_TOKEN, GH_TOKEN, AWS_SECRET_ACCESS_KEY, NPM_TOKEN, etc.
@@ -253,6 +293,10 @@ sandbox_exec_darwin() {
 
     # Clean up
     rm -f "$profile_file"
+    if [[ "$block_lan" == "true" ]]; then
+        _pf_unblock_lan "$pf_pid"
+        trap - EXIT INT TERM
+    fi
 
     if [[ $exit_code -ne 0 ]]; then
         warn "Sandbox exited with code ${exit_code}"
