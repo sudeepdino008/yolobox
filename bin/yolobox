@@ -4,7 +4,8 @@
 # Usage:
 #   yolobox setup                 — one-time configuration
 #   yolobox create <branch_name>  — create a sandboxed worktree
-#   yolobox attach                — pick a worktree with fzf and launch claude
+#   yolobox attach [--shell]      — pick a worktree with fzf and launch claude (or shell)
+#   yolobox shell                 — pick a worktree with fzf and launch shell in sandbox
 #   yolobox list                  — show all worktrees
 #   yolobox cd                    — print worktree path (use: cd $(yolobox cd))
 #   yolobox delete <branch_name>  — remove a worktree (keeps session state)
@@ -31,7 +32,8 @@ usage() {
     echo "Commands:"
     echo "  setup                 One-time configuration (deps, worktree location)"
     echo "  create <branch_name>  Create a sandboxed worktree"
-    echo "  attach                Pick a worktree with fzf and launch claude in sandbox"
+    echo "  attach [--shell]      Pick a worktree with fzf and launch claude (or shell) in sandbox"
+    echo "  shell                 Pick a worktree with fzf and launch shell in sandbox"
     echo "  list                  Show all worktrees for the current project"
     echo "  cd                    Print worktree path (use: cd \$(yolobox cd))"
     echo "  delete <branch_name>  Remove a worktree (session state is preserved)"
@@ -51,7 +53,8 @@ cmd_create() {
     worktree_create "$1"
 }
 
-cmd_attach() {
+_attach_or_shell() {
+    local sandbox_cmd="${1:-}"
     config_load
 
     local wt_base
@@ -100,7 +103,22 @@ cmd_attach() {
     local extra_writes
     extra_writes=$(config_get_allow_writes "$project")
 
-    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes"
+    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd"
+}
+
+cmd_attach() {
+    local sandbox_cmd=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --shell) sandbox_cmd="${SHELL:-/bin/bash}"; shift ;;
+            *) die "Unknown flag: $1" ;;
+        esac
+    done
+    _attach_or_shell "$sandbox_cmd"
+}
+
+cmd_shell() {
+    _attach_or_shell "${SHELL:-/bin/bash}"
 }
 
 cmd_cd() {
@@ -149,6 +167,7 @@ case "$command" in
     setup)  cmd_setup "$@" ;;
     create) cmd_create "$@" ;;
     attach) cmd_attach "$@" ;;
+    shell)  cmd_shell "$@" ;;
     cd)     cmd_cd "$@" ;;
     list)   cmd_list "$@" ;;
     delete) cmd_delete "$@" ;;

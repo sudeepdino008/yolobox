@@ -77,7 +77,8 @@ yolobox attach
 |---|---|
 | `yolobox setup` | One-time config: worktree location, dependency check |
 | `yolobox create <branch>` | Create a git worktree + synthetic home |
-| `yolobox attach` | fzf picker → launch Claude in sandbox |
+| `yolobox attach [--shell]` | fzf picker → launch Claude in sandbox (or your shell with `--shell`) |
+| `yolobox shell` | fzf picker → launch your shell in sandbox (same restrictions, no Claude) |
 | `yolobox list` | Show worktrees for current project with active/inactive status |
 | `cd $(yolobox cd)` | fzf picker → cd into a worktree on the host |
 | `yolobox delete <branch>` | Remove worktree + branch. Session state (`.claude/`) is preserved |

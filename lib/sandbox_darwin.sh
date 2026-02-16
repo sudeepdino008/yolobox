@@ -133,6 +133,7 @@ sandbox_exec_darwin() {
     local synthetic_home="$2"
     local extra_reads="${3:-}"
     local extra_writes="${4:-}"
+    local sandbox_cmd="${5:-claude --dangerously-skip-permissions}"
     local real_home="${HOME}"
 
     # Auto-detect claude binary location — if installed under $HOME (e.g. ~/.local,
@@ -193,8 +194,9 @@ sandbox_exec_darwin() {
     # Extract OAuth token from keychain before entering the sandbox.
     # The sandbox blocks reads to ~/Library/Keychains/, so Claude Code can't
     # access the keychain itself. Pass the token via environment variable instead.
+    # Skip this when launching a plain shell (not needed for bash).
     local oauth_token=""
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    if [[ "$sandbox_cmd" == claude* && -z "${ANTHROPIC_API_KEY:-}" ]]; then
         local cred_json
         cred_json=$(security find-generic-password -a "${USER}" -s "Claude Code-credentials" -w 2>/dev/null) || true
         if [[ -n "$cred_json" ]]; then
@@ -246,7 +248,7 @@ sandbox_exec_darwin() {
         GIT_CONFIG_COUNT=1 \
         GIT_CONFIG_KEY_0="remote.origin.pushurl" \
         GIT_CONFIG_VALUE_0="PUSH_DISABLED_BY_YOLOBOX" \
-        bash -c "claude --dangerously-skip-permissions") \
+        bash -c "$sandbox_cmd") \
         || exit_code=$?
 
     # Clean up
