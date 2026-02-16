@@ -61,12 +61,12 @@ cmd_attach() {
         die "No worktrees found. Run 'yolobox create <branch_name>' first."
     fi
 
-    # Gather branch names
+    # Gather branch names (handles slashes in branch names)
     local branches=()
-    for dir in "$wt_base"/*/; do
-        [[ -d "$dir" ]] || continue
-        branches+=("$(basename "$dir")")
-    done
+    while IFS= read -r branch; do
+        [[ -z "$branch" ]] && continue
+        branches+=("$branch")
+    done < <(_list_worktree_branches)
 
     if [[ ${#branches[@]} -eq 0 ]]; then
         die "No worktrees found. Run 'yolobox create <branch_name>' first."

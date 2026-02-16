@@ -6,6 +6,21 @@ worktree_path() {
     echo "$(worktrees_base)/${branch}"
 }
 
+# List all worktree branch names under the worktrees base.
+# Handles branch names with slashes (e.g., user/feature-x) by looking
+# for .git files (linked worktree markers) at any depth.
+# Outputs one branch name per line.
+_list_worktree_branches() {
+    local wt_base
+    wt_base=$(worktrees_base)
+    [[ -d "$wt_base" ]] || return 0
+
+    while IFS= read -r git_file; do
+        local wt_dir="${git_file%/.git}"
+        echo "${wt_dir#${wt_base}/}"
+    done < <(find "$wt_base" -name ".git" -type f 2>/dev/null)
+}
+
 home_path() {
     local branch="$1"
     echo "$(homes_base)/${branch}"
@@ -143,10 +158,10 @@ worktree_list() {
     fi
 
     local branches=()
-    for dir in "$wt_base"/*/; do
-        [[ -d "$dir" ]] || continue
-        branches+=("$(basename "$dir")")
-    done
+    while IFS= read -r branch; do
+        [[ -z "$branch" ]] && continue
+        branches+=("$branch")
+    done < <(_list_worktree_branches)
 
     if [[ ${#branches[@]} -eq 0 ]]; then
         echo "No worktrees found."
