@@ -112,7 +112,7 @@ cmd_attach() {
     local sandbox_cmd=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --shell) sandbox_cmd="${SHELL:-/bin/bash}"; shift ;;
+            --shell) sandbox_cmd="exec ${SHELL:-/bin/bash} -li"; shift ;;
             *) die "Unknown flag: $1" ;;
         esac
     done
@@ -120,7 +120,7 @@ cmd_attach() {
 }
 
 cmd_shell() {
-    _attach_or_shell "${SHELL:-/bin/bash}"
+    _attach_or_shell "exec ${SHELL:-/bin/bash} -li"
 }
 
 cmd_cd() {
