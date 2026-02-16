@@ -32,7 +32,7 @@ your-repo/
   └── your-repo.homes/
       ├── feature-x/        ← synthetic $HOME (read-write)
       │   ├── .claude/      ← session state persists here
-      │   └── .gitconfig    ← symlink to your real config
+      │   └── .gitconfig    ← copied from your real config
       └── bugfix-y/
 ```
 
