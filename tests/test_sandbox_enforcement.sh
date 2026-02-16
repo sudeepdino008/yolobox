@@ -5,17 +5,21 @@
 # and verify that write/read restrictions are enforced.
 
 _TEST_SANDBOX_DIR=""
+_TEST_OUTSIDE_DIR=""
 
 setup_all() {
     _TEST_SANDBOX_DIR=$(mktemp -d)
     mkdir -p "${_TEST_SANDBOX_DIR}/worktree"
     mkdir -p "${_TEST_SANDBOX_DIR}/home"
-    mkdir -p "${_TEST_SANDBOX_DIR}/outside"
+    # "outside" dir must be under $HOME (not /tmp) so sandbox write-deny applies
+    _TEST_OUTSIDE_DIR="${HOME}/.yolobox-test-outside-$$"
+    mkdir -p "$_TEST_OUTSIDE_DIR"
     echo "hello" > "${_TEST_SANDBOX_DIR}/worktree/testfile.txt"
 }
 
 teardown_all() {
     [[ -n "$_TEST_SANDBOX_DIR" ]] && rm -rf "$_TEST_SANDBOX_DIR"
+    [[ -n "$_TEST_OUTSIDE_DIR" ]] && rm -rf "$_TEST_OUTSIDE_DIR"
 }
 
 setup_all
@@ -75,13 +79,13 @@ test_write_outside_denied() {
     _require_darwin || return 2
 
     local output
-    output=$(_sandbox_run "touch '${_TEST_SANDBOX_DIR}/outside/bad'" 2>&1) && {
+    output=$(_sandbox_run "touch '${_TEST_OUTSIDE_DIR}/bad'" 2>&1) && {
         echo "  FAIL: write outside sandbox should have been denied"
         return 1
     } || true
 
     # File should NOT exist
-    assert_file_not_exists "${_TEST_SANDBOX_DIR}/outside/bad"
+    assert_file_not_exists "${_TEST_OUTSIDE_DIR}/bad"
 }
 
 test_write_to_real_home_denied() {
@@ -152,15 +156,15 @@ test_git_operations_work() {
 test_rm_outside_denied() {
     _require_darwin || return 2
 
-    # Create a file outside the sandbox
-    echo "protected" > "${_TEST_SANDBOX_DIR}/outside/protected.txt"
+    # Create a file outside the sandbox (under $HOME, which is write-denied)
+    echo "protected" > "${_TEST_OUTSIDE_DIR}/protected.txt"
 
-    _sandbox_run "rm '${_TEST_SANDBOX_DIR}/outside/protected.txt'" 2>/dev/null && {
+    _sandbox_run "rm '${_TEST_OUTSIDE_DIR}/protected.txt'" 2>/dev/null && {
         echo "  FAIL: rm outside sandbox should have been denied"
         return 1
     } || true
 
-    assert_file_exists "${_TEST_SANDBOX_DIR}/outside/protected.txt"
+    assert_file_exists "${_TEST_OUTSIDE_DIR}/protected.txt"
 }
 
 test_network_allowed() {
