@@ -6,6 +6,7 @@
 #   yolobox create <branch_name>  — create a sandboxed worktree
 #   yolobox attach                — pick a worktree with fzf and launch claude
 #   yolobox list                  — show all worktrees
+#   yolobox cd                    — print worktree path (use: cd $(yolobox cd))
 #   yolobox delete <branch_name>  — remove a worktree (keeps session state)
 
 set -euo pipefail
@@ -32,6 +33,7 @@ usage() {
     echo "  create <branch_name>  Create a sandboxed worktree"
     echo "  attach                Pick a worktree with fzf and launch claude in sandbox"
     echo "  list                  Show all worktrees for the current project"
+    echo "  cd                    Print worktree path (use: cd \$(yolobox cd))"
     echo "  delete <branch_name>  Remove a worktree (session state is preserved)"
     echo ""
     echo "Run 'yolobox setup' first to configure."
@@ -101,6 +103,26 @@ cmd_attach() {
     sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes"
 }
 
+cmd_cd() {
+    local paths=()
+    while IFS= read -r line; do
+        paths+=("${line%% *}")
+    done < <(git worktree list)
+
+    if [[ ${#paths[@]} -eq 0 ]]; then
+        die "No worktrees found."
+    fi
+
+    local selected
+    if [[ ${#paths[@]} -eq 1 ]]; then
+        selected="${paths[0]}"
+    else
+        selected=$(printf '%s\n' "${paths[@]}" | fzf --prompt="Select worktree: " --height=10 --reverse) || die "No worktree selected."
+    fi
+
+    echo "$selected"
+}
+
 cmd_list() {
     config_load
     worktree_list
@@ -127,6 +149,7 @@ case "$command" in
     setup)  cmd_setup "$@" ;;
     create) cmd_create "$@" ;;
     attach) cmd_attach "$@" ;;
+    cd)     cmd_cd "$@" ;;
     list)   cmd_list "$@" ;;
     delete) cmd_delete "$@" ;;
     help|-h|--help)
