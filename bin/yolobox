@@ -3,6 +3,7 @@
 #
 # Usage:
 #   yolobox setup                 — one-time configuration
+#   yolobox new <branch_name>     — create a sandboxed worktree and immediately attach
 #   yolobox create <branch_name>  — create a sandboxed worktree
 #   yolobox attach [--shell]      — pick a worktree with fzf and launch claude (or shell)
 #   yolobox shell                 — pick a worktree with fzf and launch shell in sandbox
@@ -31,7 +32,9 @@ usage() {
     echo ""
     echo "Commands:"
     echo "  setup                 One-time configuration (deps, worktree location)"
+    echo "  new <branch_name>     Create a sandboxed worktree and attach immediately"
     echo "  create <branch_name>  Create a sandboxed worktree"
+    echo "    --attach            Launch claude in the new worktree after creating it"
     echo "  attach [--shell]      Pick a worktree with fzf and launch claude (or shell) in sandbox"
     echo "  shell                 Pick a worktree with fzf and launch shell in sandbox"
     echo "  list                  Show all worktrees for the current project"
@@ -46,11 +49,56 @@ cmd_setup() {
 }
 
 cmd_create() {
+    local do_attach=0
+    local branch=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --attach) do_attach=1; shift ;;
+            -*) die "Unknown flag: $1" ;;
+            *) branch="$1"; shift ;;
+        esac
+    done
+    if [[ -z "$branch" ]]; then
+        die "Usage: yolobox create <branch_name> [--attach]"
+    fi
+    config_load
+    worktree_create "$branch"
+    if [[ $do_attach -eq 1 ]]; then
+        _attach_to_branch "$branch" ""
+    fi
+}
+
+cmd_new() {
     if [[ $# -lt 1 ]]; then
-        die "Usage: yolobox create <branch_name>"
+        die "Usage: yolobox new <branch_name>"
     fi
     config_load
     worktree_create "$1"
+    _attach_to_branch "$1" ""
+}
+
+_attach_to_branch() {
+    local branch="$1"
+    local sandbox_cmd="${2:-}"
+
+    local wt_path
+    wt_path=$(worktree_path "$branch")
+    local hm_path
+    hm_path=$(home_path "$branch")
+
+    if [[ ! -d "$hm_path" ]]; then
+        warn "Synthetic home missing, recreating..."
+        _setup_synthetic_home "$branch" "$hm_path"
+    fi
+
+    local project
+    project=$(detect_project_name)
+    local extra_reads
+    extra_reads=$(config_get_allow_reads "$project")
+    local extra_writes
+    extra_writes=$(config_get_allow_writes "$project")
+
+    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd"
 }
 
 _attach_or_shell() {
@@ -85,25 +133,7 @@ _attach_or_shell() {
         selected=$(printf '%s\n' "${branches[@]}" | fzf --prompt="Select worktree: " --height=10 --reverse) || die "No worktree selected."
     fi
 
-    local wt_path
-    wt_path=$(worktree_path "$selected")
-    local hm_path
-    hm_path=$(home_path "$selected")
-
-    if [[ ! -d "$hm_path" ]]; then
-        warn "Synthetic home missing, recreating..."
-        _setup_synthetic_home "$selected" "$hm_path"
-    fi
-
-    # Gather extra access rules from config (global + project-specific)
-    local project
-    project=$(detect_project_name)
-    local extra_reads
-    extra_reads=$(config_get_allow_reads "$project")
-    local extra_writes
-    extra_writes=$(config_get_allow_writes "$project")
-
-    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd"
+    _attach_to_branch "$selected" "$sandbox_cmd"
 }
 
 cmd_attach() {
@@ -165,6 +195,7 @@ shift
 
 case "$command" in
     setup)  cmd_setup "$@" ;;
+    new)    cmd_new "$@" ;;
     create) cmd_create "$@" ;;
     attach) cmd_attach "$@" ;;
     shell)  cmd_shell "$@" ;;
