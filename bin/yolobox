@@ -9,7 +9,7 @@
 #   yolobox shell                 — pick a worktree with fzf and launch shell in sandbox
 #   yolobox list                  — show all worktrees
 #   yolobox cd                    — print worktree path (use: cd $(yolobox cd))
-#   yolobox delete <branch_name>  — remove a worktree (keeps session state)
+#   yolobox delete [branch_name]  — pick worktrees with fzf (multi-select) or pass branch directly
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ usage() {
     echo "  shell                 Pick a worktree with fzf and launch shell in sandbox"
     echo "  list                  Show all worktrees for the current project"
     echo "  cd                    Print worktree path (use: cd \$(yolobox cd))"
-    echo "  delete <branch_name>  Remove a worktree (session state is preserved)"
+    echo "  delete [branch_name]  Remove worktree(s) — pick with fzf (multi) or pass branch directly"
     echo ""
     echo "Run 'yolobox setup' first to configure."
 }
@@ -179,11 +179,37 @@ cmd_list() {
 }
 
 cmd_delete() {
-    if [[ $# -lt 1 ]]; then
-        die "Usage: yolobox delete <branch_name>"
-    fi
     config_load
-    worktree_delete "$1"
+
+    if [[ $# -ge 1 ]]; then
+        worktree_delete "$1"
+        return
+    fi
+
+    local wt_base
+    wt_base=$(worktrees_base)
+
+    if [[ ! -d "$wt_base" ]]; then
+        die "No worktrees found."
+    fi
+
+    local branches=()
+    while IFS= read -r branch; do
+        [[ -z "$branch" ]] && continue
+        branches+=("$branch")
+    done < <(_list_worktree_branches)
+
+    if [[ ${#branches[@]} -eq 0 ]]; then
+        die "No worktrees found."
+    fi
+
+    local selected
+    selected=$(printf '%s\n' "${branches[@]}" | fzf --prompt="Delete worktrees: " --multi --height=15 --reverse) || die "No worktree selected."
+
+    while IFS= read -r branch; do
+        [[ -z "$branch" ]] && continue
+        worktree_delete "$branch"
+    done <<< "$selected"
 }
 
 # Main dispatcher
