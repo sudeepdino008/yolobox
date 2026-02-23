@@ -87,6 +87,21 @@ test_03b_push_url_not_modified() {
     fi
 }
 
+test_03c_ssh_url_rewrite_in_synthetic_gitconfig() {
+    # Synthetic gitconfig should rewrite SSH GitHub URLs to HTTPS
+    local project
+    project=$(detect_project_name)
+    local hm_path="${_TEST_WT_DIR}/${project}.homes/test-yolobox-wt-1"
+
+    local insteadof
+    insteadof=$(git config --file "${hm_path}/.gitconfig" "url.https://github.com/.insteadOf" 2>/dev/null || true)
+    assert_eq "git@github.com:" "$insteadof" "insteadOf should rewrite SSH to HTTPS"
+
+    local push_insteadof
+    push_insteadof=$(git config --file "${hm_path}/.gitconfig" "url.https://github.com/.pushInsteadOf" 2>/dev/null || true)
+    assert_eq "git@github.com:" "$push_insteadof" "pushInsteadOf should rewrite SSH to HTTPS"
+}
+
 test_04_create_duplicate() {
     # Should fail — worktree already exists from test_02
     local output

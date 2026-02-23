@@ -83,10 +83,11 @@ _setup_synthetic_home() {
         git config --file "${hm_path}/.gitconfig" --add "credential.https://github.com.helper" "!${gh_bin} auth git-credential"
     fi
 
-    # Rewrite SSH push URLs to HTTPS. Git worktrees share the parent repo's
-    # remote config, which often has SSH push URLs. SSH fails inside the sandbox
-    # (can't read ~/.ssh/known_hosts), so rewrite to HTTPS where the gh
-    # credential helper + GH_TOKEN can handle authentication.
+    # Rewrite SSH GitHub URLs to HTTPS. SSH can't work inside the sandbox
+    # (can't read ~/.ssh/known_hosts). This rewrites ALL git@github.com:
+    # URLs — including explicit pushurl values in the parent repo's .git/config
+    # — to HTTPS, where the gh credential helper + GH_TOKEN handle auth.
+    git config --file "${hm_path}/.gitconfig" "url.https://github.com/.insteadOf" "git@github.com:"
     git config --file "${hm_path}/.gitconfig" "url.https://github.com/.pushInsteadOf" "git@github.com:"
 
     # Copy gh CLI config (auth tokens for gh commands inside sandbox).
