@@ -81,6 +81,7 @@ worktrees_base() {
 }
 
 # Resolve the homes base directory for the current project
+# Homes live alongside worktrees but hold synthetic $HOME state
 homes_base() {
     local project
     project=$(detect_project_name)
