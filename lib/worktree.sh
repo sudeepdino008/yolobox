@@ -83,6 +83,12 @@ _setup_synthetic_home() {
         git config --file "${hm_path}/.gitconfig" --add "credential.https://github.com.helper" "!${gh_bin} auth git-credential"
     fi
 
+    # Rewrite SSH push URLs to HTTPS. Git worktrees share the parent repo's
+    # remote config, which often has SSH push URLs. SSH fails inside the sandbox
+    # (can't read ~/.ssh/known_hosts), so rewrite to HTTPS where the gh
+    # credential helper + GH_TOKEN can handle authentication.
+    git config --file "${hm_path}/.gitconfig" "url.https://github.com/.pushInsteadOf" "git@github.com:"
+
     # Copy gh CLI config (auth tokens for gh commands inside sandbox).
     # Seatbelt blocks reads to real $HOME, so gh can't find its config there.
     # Copy to synthetic home so $HOME/.config/gh/ resolves correctly inside sandbox.
