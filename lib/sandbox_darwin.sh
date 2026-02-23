@@ -220,7 +220,7 @@ sandbox_exec_darwin() {
     if [[ -n "$extra_writes" ]]; then
         info "Extra writes: $(echo "$extra_writes" | tr '\n' ' ')"
     fi
-    local env_list="HOME, PATH, SHELL, TERM, LANG, USER, TMPDIR"
+    local env_list="HOME, PATH, SHELL, TERM, LANG, USER, TMPDIR, GOCACHE, GOMODCACHE"
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         env_list="${env_list}, ANTHROPIC_API_KEY"
     elif [[ -n "$oauth_token" ]]; then
@@ -243,6 +243,8 @@ sandbox_exec_darwin() {
         LANG="${LANG:-en_US.UTF-8}" \
         USER="${USER:-$(whoami)}" \
         TMPDIR="${TMPDIR:-/tmp}" \
+        GOCACHE="${real_home}/Library/Caches/go-build" \
+        GOMODCACHE="${real_home}/go/pkg/mod" \
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
         CLAUDE_CODE_OAUTH_TOKEN="${oauth_token}" \
         GIT_CONFIG_COUNT=1 \
