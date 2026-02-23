@@ -73,6 +73,24 @@ _setup_synthetic_home() {
         cp "${real_home}/.gitconfig" "${hm_path}/.gitconfig"
     fi
 
+    # Configure gh as git credential helper so HTTPS push/pull works inside sandbox.
+    # Equivalent to: gh auth setup-git --hostname github.com
+    # The empty helper entry clears any inherited helper before setting gh.
+    local gh_bin
+    gh_bin=$(command -v gh 2>/dev/null) || true
+    if [[ -n "$gh_bin" ]]; then
+        git config --file "${hm_path}/.gitconfig" "credential.https://github.com.helper" ""
+        git config --file "${hm_path}/.gitconfig" --add "credential.https://github.com.helper" "!${gh_bin} auth git-credential"
+    fi
+
+    # Copy gh CLI config (auth tokens for gh commands inside sandbox).
+    # Seatbelt blocks reads to real $HOME, so gh can't find its config there.
+    # Copy to synthetic home so $HOME/.config/gh/ resolves correctly inside sandbox.
+    if [[ -d "${real_home}/.config/gh" ]]; then
+        mkdir -p "${hm_path}/.config"
+        cp -R "${real_home}/.config/gh" "${hm_path}/.config/gh"
+    fi
+
     # Symlink .local (Claude Code native install lives at ~/.local/bin/claude
     # and checks $HOME/.local when installMethod is "native")
     if [[ -d "${real_home}/.local" ]]; then

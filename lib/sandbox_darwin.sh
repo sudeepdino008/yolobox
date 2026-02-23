@@ -134,6 +134,7 @@ sandbox_exec_darwin() {
     local extra_reads="${3:-}"
     local extra_writes="${4:-}"
     local sandbox_cmd="${5:-claude --dangerously-skip-permissions}"
+    local extra_envs="${6:-}"
     local real_home="${HOME}"
 
     # Auto-detect claude binary location — if installed under $HOME (e.g. ~/.local,
@@ -244,31 +245,50 @@ sandbox_exec_darwin() {
     elif [[ -n "$oauth_token" ]]; then
         env_list="${env_list}, CLAUDE_CODE_OAUTH_TOKEN"
     fi
+    if [[ -n "${GH_TOKEN:-}" ]]; then
+        env_list="${env_list}, GH_TOKEN"
+    fi
+
+    # Build env -i argument list. Start with fixed essential vars.
+    local env_args=(
+        env -i
+        HOME="$synthetic_home"
+        PATH="${synthetic_home}/.local/bin:$PATH"
+        SHELL="${SHELL:-/bin/bash}"
+        TERM="${TERM:-xterm-256color}"
+        LANG="${LANG:-en_US.UTF-8}"
+        USER="${USER:-$(whoami)}"
+        TMPDIR="${TMPDIR:-/tmp}"
+        GOCACHE="${real_home}/Library/Caches/go-build"
+        GOMODCACHE="${real_home}/go/pkg/mod"
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+        CLAUDE_CODE_OAUTH_TOKEN="${oauth_token}"
+        GH_TOKEN="${GH_TOKEN:-}"
+    )
+
+    # Append extra env vars from config (allow_env=VAR1,VAR2 ...).
+    # Only pass through vars that are set in the current environment.
+    if [[ -n "$extra_envs" ]]; then
+        while IFS= read -r var; do
+            [[ -z "$var" ]] && continue
+            env_args+=("${var}=${!var:-}")
+            if [[ -n "${!var:-}" ]]; then
+                env_list="${env_list}, ${var}"
+            fi
+        done <<< "$extra_envs"
+    fi
+
+    env_args+=(bash -c "$sandbox_cmd")
+
     info "Environment scrubbed (env -i). Passing: ${env_list}"
     echo ""
 
-    # Run sandbox-exec with scrubbed environment — only essential vars pass through.
-    # This kills GITHUB_TOKEN, GH_TOKEN, AWS_SECRET_ACCESS_KEY, NPM_TOKEN, etc.
+    # Run sandbox-exec with scrubbed environment.
     # Start from worktree dir to avoid getcwd errors (Seatbelt blocks reads to real $HOME CWD).
     local exit_code=0
     (cd "$worktree_path" && \
         sandbox-exec -f "$profile_file" \
-        env -i \
-        HOME="$synthetic_home" \
-        PATH="${synthetic_home}/.local/bin:$PATH" \
-        SHELL="${SHELL:-/bin/bash}" \
-        TERM="${TERM:-xterm-256color}" \
-        LANG="${LANG:-en_US.UTF-8}" \
-        USER="${USER:-$(whoami)}" \
-        TMPDIR="${TMPDIR:-/tmp}" \
-        GOCACHE="${real_home}/Library/Caches/go-build" \
-        GOMODCACHE="${real_home}/go/pkg/mod" \
-        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
-        CLAUDE_CODE_OAUTH_TOKEN="${oauth_token}" \
-        GIT_CONFIG_COUNT=1 \
-        GIT_CONFIG_KEY_0="remote.origin.pushurl" \
-        GIT_CONFIG_VALUE_0="PUSH_DISABLED_BY_YOLOBOX" \
-        bash -c "$sandbox_cmd") \
+        "${env_args[@]}") \
         || exit_code=$?
 
     # Clean up

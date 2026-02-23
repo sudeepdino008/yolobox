@@ -97,8 +97,10 @@ _attach_to_branch() {
     extra_reads=$(config_get_allow_reads "$project")
     local extra_writes
     extra_writes=$(config_get_allow_writes "$project")
+    local extra_envs
+    extra_envs=$(config_get_allow_envs "$project")
 
-    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd"
+    sandbox_exec "$wt_path" "$hm_path" "$extra_reads" "$extra_writes" "$sandbox_cmd" "$extra_envs"
 }
 
 _attach_or_shell() {

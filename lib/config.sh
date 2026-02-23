@@ -82,6 +82,33 @@ config_get_allow_writes() {
     done < "$YOLOBOX_CONFIG_FILE"
 }
 
+# Get extra env var names to pass through into the sandbox (global + project-specific).
+# Values may be comma-separated lists. Outputs one var name per line.
+# Usage: config_get_allow_envs [project_name]
+config_get_allow_envs() {
+    local project="${1:-}"
+    [[ -f "$YOLOBOX_CONFIG_FILE" ]] || return 0
+
+    while IFS='=' read -r key value; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        [[ -z "$value" ]] && continue
+        local emit=0
+        # Global: allow_env=VAR1,VAR2
+        [[ "$key" == "allow_env" ]] && emit=1
+        # Project-specific: allow_env.myproject=VAR1,VAR2
+        [[ -n "$project" && "$key" == "allow_env.${project}" ]] && emit=1
+        if [[ $emit -eq 1 ]]; then
+            IFS=',' read -ra vars <<< "$value"
+            for var in "${vars[@]}"; do
+                var=$(echo "$var" | xargs)
+                [[ -n "$var" ]] && echo "$var"
+            done
+        fi
+    done < "$YOLOBOX_CONFIG_FILE"
+}
+
 config_check_deps() {
     local missing=()
 
