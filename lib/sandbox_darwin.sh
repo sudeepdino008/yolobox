@@ -228,10 +228,16 @@ sandbox_exec_darwin() {
     # If GH_TOKEN is already set, use it; otherwise extract from `gh auth token`.
     local gh_token="${GH_TOKEN:-}"
     if [[ -z "$gh_token" ]]; then
-        gh_token=$(gh auth token 2>/dev/null) || true
+        local gh_err
+        gh_err=$(gh auth token 2>&1) && gh_token="$gh_err" || true
+        if [[ -z "$gh_token" ]]; then
+            # Fallback: extract directly from macOS keychain (gh stores tokens
+            # with service "gh:github.com").
+            gh_token=$(security find-generic-password -s "gh:github.com" -w 2>/dev/null) || true
+        fi
     fi
     if [[ -n "$gh_token" ]]; then
-        info "GH_TOKEN extracted from gh CLI"
+        info "GH_TOKEN extracted for sandbox"
     else
         warn "No GH_TOKEN available — git push/gh commands won't authenticate."
         warn "Run 'gh auth login' outside the sandbox, then restart."
