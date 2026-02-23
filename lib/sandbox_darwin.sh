@@ -179,6 +179,18 @@ sandbox_exec_darwin() {
         fi
     fi
 
+    # allow_write implies allow_read — a path you can write to you must also be able to read.
+    if [[ -n "$extra_writes" ]]; then
+        while IFS= read -r p; do
+            [[ -z "$p" ]] && continue
+            if [[ -n "$extra_reads" ]]; then
+                extra_reads="${extra_reads}"$'\n'"${p}"
+            else
+                extra_reads="${p}"
+            fi
+        done <<< "$extra_writes"
+    fi
+
     # Collect traversal dirs for all whitelisted paths under real home.
     # Seatbelt blocks reads to $HOME, so git's getcwd() canonicalization
     # needs file-read-metadata on intermediate path components.
@@ -188,6 +200,12 @@ sandbox_exec_darwin() {
         _traversal_dirs "$synthetic_home" "$real_home"
         if [[ -n "$parent_gitdir" ]]; then
             _traversal_dirs "$parent_gitdir" "$real_home"
+        fi
+        if [[ -n "$extra_reads" ]]; then
+            while IFS= read -r p; do
+                [[ -z "$p" ]] && continue
+                _traversal_dirs "$p" "$real_home"
+            done <<< "$extra_reads"
         fi
     } | sort -u)
 
