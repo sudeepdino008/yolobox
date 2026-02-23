@@ -288,9 +288,15 @@ sandbox_exec_darwin() {
 
     # Append extra env vars from config (allow_env=VAR1,VAR2 ...).
     # Only pass through vars that are set in the current environment.
+    # Skip vars already handled above with dedicated extraction logic —
+    # the allow_env loop uses ${!var} (indirect expansion on the env var name),
+    # which would resolve to empty for vars stored in differently-named locals
+    # (e.g. gh_token vs GH_TOKEN), overwriting the already-correct value.
+    local _builtin_env_vars=" HOME PATH SHELL TERM LANG USER TMPDIR GOCACHE GOMODCACHE ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN GH_TOKEN "
     if [[ -n "$extra_envs" ]]; then
         while IFS= read -r var; do
             [[ -z "$var" ]] && continue
+            [[ "$_builtin_env_vars" == *" ${var} "* ]] && continue
             env_args+=("${var}=${!var:-}")
             if [[ -n "${!var:-}" ]]; then
                 env_list="${env_list}, ${var}"
