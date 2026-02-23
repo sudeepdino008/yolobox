@@ -230,6 +230,12 @@ sandbox_exec_darwin() {
     if [[ -z "$gh_token" ]]; then
         gh_token=$(gh auth token 2>/dev/null) || true
     fi
+    if [[ -n "$gh_token" ]]; then
+        info "GH_TOKEN extracted from gh CLI"
+    else
+        warn "No GH_TOKEN available — git push/gh commands won't authenticate."
+        warn "Run 'gh auth login' outside the sandbox, then restart."
+    fi
 
     # Generate profile to a temp file
     local profile_file
