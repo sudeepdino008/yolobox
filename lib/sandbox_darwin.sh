@@ -223,6 +223,14 @@ sandbox_exec_darwin() {
         fi
     fi
 
+    # Extract GH_TOKEN from gh CLI before entering the sandbox.
+    # The sandbox blocks keychain/config reads, so gh can't authenticate itself.
+    # If GH_TOKEN is already set, use it; otherwise extract from `gh auth token`.
+    local gh_token="${GH_TOKEN:-}"
+    if [[ -z "$gh_token" ]]; then
+        gh_token=$(gh auth token 2>/dev/null) || true
+    fi
+
     # Generate profile to a temp file
     local profile_file
     profile_file=$(mktemp /tmp/yolobox-sb-XXXXXX)
@@ -245,7 +253,7 @@ sandbox_exec_darwin() {
     elif [[ -n "$oauth_token" ]]; then
         env_list="${env_list}, CLAUDE_CODE_OAUTH_TOKEN"
     fi
-    if [[ -n "${GH_TOKEN:-}" ]]; then
+    if [[ -n "$gh_token" ]]; then
         env_list="${env_list}, GH_TOKEN"
     fi
 
@@ -263,7 +271,7 @@ sandbox_exec_darwin() {
         GOMODCACHE="${real_home}/go/pkg/mod"
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
         CLAUDE_CODE_OAUTH_TOKEN="${oauth_token}"
-        GH_TOKEN="${GH_TOKEN:-}"
+        GH_TOKEN="${gh_token}"
     )
 
     # Append extra env vars from config (allow_env=VAR1,VAR2 ...).
