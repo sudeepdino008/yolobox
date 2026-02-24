@@ -128,6 +128,21 @@ _setup_synthetic_home() {
         cp -R "${real_home}/.claude/${d}" "${hm_path}/.claude/" 2>/dev/null || true
     done
 
+    # Copy per-project memory and config from ~/.claude/projects/.
+    # This loads auto-memory (MEMORY.md, topic files) and project-scoped
+    # CLAUDE.md into the sandbox. Skip .jsonl session transcripts (large,
+    # per-session). Preserves directory structure so Claude finds memories
+    # at the expected encoded-path location.
+    if [[ -d "${real_home}/.claude/projects" ]]; then
+        find "${real_home}/.claude/projects" -type f ! -name '*.jsonl' -print0 2>/dev/null | \
+        while IFS= read -r -d '' f; do
+            local rel="${f#${real_home}/.claude/}"
+            local dest="${hm_path}/.claude/${rel}"
+            mkdir -p "$(dirname "$dest")"
+            cp "$f" "$dest" 2>/dev/null || true
+        done
+    fi
+
     # Auto-accept the bypass permissions prompt so the sandbox session starts
     # without manual intervention. This is safe because yolobox IS the sandbox.
     local settings="${hm_path}/.claude/settings.json"
