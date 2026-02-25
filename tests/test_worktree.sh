@@ -28,6 +28,11 @@ teardown_all() {
         for branch in test-yolobox-wt-1 test-yolobox-wt-2 test-yolobox-wt-3 test-yolobox-dup test-yolobox-del; do
             git -C "$repo_root" branch -D "$branch" 2>/dev/null || true
         done
+        # Clean up any yolobox/* sandbox branches created during tests
+        git -C "$repo_root" for-each-ref --format='%(refname:short)' 'refs/heads/yolobox/*' | \
+            while IFS= read -r branch; do
+                git -C "$repo_root" branch -D "$branch" 2>/dev/null || true
+            done
     fi
 
     [[ -n "$_TEST_WT_DIR" ]] && rm -rf "$_TEST_WT_DIR"
@@ -100,6 +105,30 @@ test_03c_ssh_url_rewrite_in_synthetic_gitconfig() {
     local push_insteadof
     push_insteadof=$(git config --file "${hm_path}/.gitconfig" "url.https://github.com/.pushInsteadOf" 2>/dev/null || true)
     assert_eq "git@github.com:" "$push_insteadof" "pushInsteadOf should rewrite SSH to HTTPS"
+}
+
+test_03d_create_already_checked_out_branch() {
+    # Creating a worktree for the current branch (already checked out) should
+    # succeed by creating a yolobox/<branch> sandbox branch instead.
+    local current_branch
+    current_branch=$(git -C "$(git_repo_root)" symbolic-ref --short HEAD 2>/dev/null)
+
+    local output
+    output=$(worktree_create "$current_branch" 2>&1)
+    assert_contains "$output" "already checked out" "Should mention branch is already checked out/sandbox created"
+
+    local project
+    project=$(detect_project_name)
+    local wt_path="${_TEST_WT_DIR}/${project}.worktrees/${current_branch}"
+    assert_dir_exists "$wt_path"
+
+    # Verify the worktree is on the sandbox branch
+    local wt_branch
+    wt_branch=$(git -C "$wt_path" symbolic-ref --short HEAD 2>/dev/null)
+    assert_eq "yolobox/${current_branch}" "$wt_branch" "Should be on yolobox/<branch> sandbox branch"
+
+    # Clean up
+    worktree_delete "$current_branch" >/dev/null 2>&1
 }
 
 test_04_create_duplicate() {

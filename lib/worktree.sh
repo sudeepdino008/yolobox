@@ -46,8 +46,17 @@ worktree_create() {
     repo_root=$(git_repo_root)
 
     if git -C "$repo_root" show-ref --verify --quiet "refs/heads/${branch}" 2>/dev/null; then
-        # Branch already exists — don't use -b
-        git -C "$repo_root" worktree add "$wt_path" "$branch"
+        # Branch already exists — try to check it out directly
+        local err
+        if ! err=$(git -C "$repo_root" worktree add "$wt_path" "$branch" 2>&1); then
+            if [[ "$err" == *"already checked out"* || "$err" == *"already used by worktree"* ]]; then
+                # Branch is checked out in another worktree — create a sandbox branch based on it
+                info "Branch '${branch}' is already checked out; creating 'yolobox/${branch}' branch"
+                git -C "$repo_root" worktree add "$wt_path" -B "yolobox/${branch}" "${branch}"
+            else
+                die "Failed to create worktree: $err"
+            fi
+        fi
     else
         # New branch — create it
         git -C "$repo_root" worktree add "$wt_path" -b "$branch"
