@@ -133,7 +133,7 @@ sandbox_exec_darwin() {
     local synthetic_home="$2"
     local extra_reads="${3:-}"
     local extra_writes="${4:-}"
-    local sandbox_cmd="${5:-claude --dangerously-skip-permissions}"
+    local sandbox_cmd="${5:-claude --dangerously-skip-permissions --resume}"
     local extra_envs="${6:-}"
     local real_home="${HOME}"
 
