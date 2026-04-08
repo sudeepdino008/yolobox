@@ -64,7 +64,7 @@ cmd_create() {
     config_load
     worktree_create "$branch"
     if [[ $do_attach -eq 1 ]]; then
-        _attach_to_branch "$branch" ""
+        _attach_to_branch "$branch" "claude --dangerously-skip-permissions"
     fi
 }
 
@@ -74,7 +74,7 @@ cmd_new() {
     fi
     config_load
     worktree_create "$1"
-    _attach_to_branch "$1" ""
+    _attach_to_branch "$1" "claude --dangerously-skip-permissions"
 }
 
 _attach_to_branch() {
