@@ -7,18 +7,27 @@ worktree_path() {
 }
 
 # List all worktree branch names under the worktrees base.
-# Handles branch names with slashes (e.g., user/feature-x) by looking
-# for .git files (linked worktree markers) at any depth.
+# Uses `git worktree list` (reads git metadata, not filesystem) to avoid
+# slow find traversals on large codebases.
 # Outputs one branch name per line.
 _list_worktree_branches() {
     local wt_base
     wt_base=$(worktrees_base)
     [[ -d "$wt_base" ]] || return 0
 
-    while IFS= read -r git_file; do
-        local wt_dir="${git_file%/.git}"
-        echo "${wt_dir#${wt_base}/}"
-    done < <(find "$wt_base" -name ".git" -type f 2>/dev/null)
+    # Resolve symlinks so paths match git's canonicalized output
+    # (e.g. macOS /var/folders → /private/var/folders).
+    local real_wt_base
+    real_wt_base=$(cd "$wt_base" && pwd -P)
+
+    local repo_root
+    repo_root=$(git_repo_root)
+
+    git -C "$repo_root" worktree list --porcelain | \
+        sed -n 's/^worktree //p' | \
+        while IFS= read -r wt_path; do
+            [[ "$wt_path" == "${real_wt_base}/"* ]] && echo "${wt_path#${real_wt_base}/}"
+        done
 }
 
 home_path() {
